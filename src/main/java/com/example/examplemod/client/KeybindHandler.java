@@ -6,11 +6,14 @@ import com.example.examplemod.client.gui.HomeConfirmScreen;
 
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.settings.KeyConflictContext;
 import org.lwjgl.glfw.GLFW;
+import com.example.examplemod.client.TravelManager;
+
 
 @EventBusSubscriber
 public class KeybindHandler {
@@ -32,7 +35,7 @@ public class KeybindHandler {
             Minecraft mc = Minecraft.getInstance();
 
             if (mc.player != null) {
-                mc.setScreen(new HomeConfirmScreen());
+                TravelManager.startConfirmation();
             }
         }
     }
