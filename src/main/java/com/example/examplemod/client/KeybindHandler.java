@@ -2,6 +2,8 @@ package com.example.examplemod.client;
 
 import com.mojang.blaze3d.platform.InputConstants;
 
+import com.example.examplemod.client.gui.HomeConfirmScreen;
+
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
@@ -31,9 +33,7 @@ public class KeybindHandler {
             Minecraft mc = Minecraft.getInstance();
 
             if (mc.player != null) {
-                mc.player.sendSystemMessage(
-                        Component.literal("Opening Crossroads...")
-                );
+                mc.setScreen(new HomeConfirmScreen());
             }
         }
     }
