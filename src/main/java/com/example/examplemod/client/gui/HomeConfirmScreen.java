@@ -2,7 +2,12 @@ package com.example.examplemod.client.gui;
 
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
+import org.lwjgl.glfw.GLFW;
+import com.example.examplemod.client.gui.CountdownScreen;
+
+
 
 public class HomeConfirmScreen extends Screen {
 
@@ -37,16 +42,51 @@ public class HomeConfirmScreen extends Screen {
 
     private void onAccept() {
 
-        if (minecraft != null && minecraft.player != null) {
-            minecraft.player.sendSystemMessage(
-                Component.literal("Starting countdown...")
-            );
-        }
-
-        minecraft.setScreen(null);
+       minecraft.setScreen(new CountdownScreen());
     }
 
     private void onCancel() {
         minecraft.setScreen(null);
+    }
+
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+
+        // Y = accept
+        if (keyCode == GLFW.GLFW_KEY_Y) {
+            onAccept();
+            return true;
+        }
+
+        // N = cancel
+        if (keyCode == GLFW.GLFW_KEY_N) {
+            onCancel();
+            return true;
+        }
+
+        // Any other key closes the menu
+        onCancel();
+        return true;
+    }
+
+    @Override
+    public void onClose() {
+        onCancel();
+    }
+
+    @Override
+    public boolean keyPressed(KeyEvent event) {
+
+        if (event.key() == GLFW.GLFW_KEY_Y) {
+            onAccept();
+            return true;
+        }
+
+        if (event.key() == GLFW.GLFW_KEY_N) {
+            onCancel();
+            return true;
+        }
+
+        onCancel();
+        return true;
     }
 }
