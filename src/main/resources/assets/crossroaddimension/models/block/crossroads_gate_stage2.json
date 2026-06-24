@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:block/cross",
+  "textures": {
+    "cross": "minecraft:block/calibrated_sculk_sensor_amethyst"
+  }
+}

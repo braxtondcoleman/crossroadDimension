@@ -5,6 +5,8 @@ import com.example.examplemod.CrossroadDimension;
 import com.example.examplemod.client.gui.HomeConfirmScreen;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -35,8 +37,19 @@ public class KeybindHandler {
 
         while (OPEN_CROSSROADS.consumeClick()) {
             if (mc.screen == null) {
+                if (isInsidePocketRealm(mc)) {
+                    TravelManager.cancel();
+                    mc.player.sendSystemMessage(Component.literal("You are currently inside a Pocket Realm. Use the Crossroads Gate to leave."));
+                    continue;
+                }
                 mc.setScreen(new HomeConfirmScreen());
             }
         }
+    }
+
+    private static boolean isInsidePocketRealm(Minecraft mc) {
+        Identifier dimensionId = mc.player.level().dimension().identifier();
+        return dimensionId.getNamespace().equals(CrossroadDimension.MODID)
+                && dimensionId.getPath().startsWith("pocket_realm/");
     }
 }

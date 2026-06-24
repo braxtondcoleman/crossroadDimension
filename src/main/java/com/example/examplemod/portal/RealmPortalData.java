@@ -12,12 +12,14 @@ import net.minecraft.world.level.Level;
 
 public record RealmPortalData(
         UUID owner,
+        String ownerName,
         UUID portalId,
         ResourceKey<Level> originDimension,
         BlockPos originPosition,
         ResourceKey<Level> destinationDimension,
         BlockPos destinationPosition,
         RealmPortalState state,
+        long createdGameTime,
         OptionalLong expirationGameTime,
         int realmPopulation,
         int portalPrimaryColor,
@@ -27,10 +29,12 @@ public record RealmPortalData(
 
     public static final Codec<RealmPortalData> CODEC = RecordCodecBuilder.create(instance -> instance.group(
             UUID_CODEC.fieldOf("owner").forGetter(RealmPortalData::owner),
+            Codec.STRING.optionalFieldOf("owner_name", "Unknown").forGetter(RealmPortalData::ownerName),
             UUID_CODEC.fieldOf("portal_id").forGetter(RealmPortalData::portalId),
             GlobalPos.CODEC.fieldOf("origin").forGetter(RealmPortalData::origin),
             GlobalPos.CODEC.fieldOf("destination").forGetter(RealmPortalData::destination),
             RealmPortalState.CODEC.fieldOf("state").forGetter(RealmPortalData::state),
+            Codec.LONG.optionalFieldOf("created_game_time", 0L).forGetter(RealmPortalData::createdGameTime),
             Codec.LONG.optionalFieldOf("expiration_game_time").forGetter(RealmPortalData::expirationGameTimeAsOptional),
             Codec.INT.optionalFieldOf("realm_population", 0).forGetter(RealmPortalData::realmPopulation),
             Codec.INT.optionalFieldOf("portal_primary_color", 0x7A4DFF).forGetter(RealmPortalData::portalPrimaryColor),
@@ -39,17 +43,21 @@ public record RealmPortalData(
 
     public static RealmPortalData create(
             UUID owner,
+            String ownerName,
             UUID portalId,
             GlobalPos origin,
             GlobalPos destination,
+            long createdGameTime,
             OptionalLong expirationGameTime
     ) {
         return fromGlobalPositions(
                 owner,
+                ownerName,
                 portalId,
                 origin,
                 destination,
                 RealmPortalState.OPEN,
+                createdGameTime,
                 optionalLongToOptional(expirationGameTime),
                 0,
                 0x7A4DFF,
@@ -59,10 +67,12 @@ public record RealmPortalData(
 
     private static RealmPortalData fromGlobalPositions(
             UUID owner,
+            String ownerName,
             UUID portalId,
             GlobalPos origin,
             GlobalPos destination,
             RealmPortalState state,
+            long createdGameTime,
             Optional<Long> expirationGameTime,
             int realmPopulation,
             int portalPrimaryColor,
@@ -70,12 +80,14 @@ public record RealmPortalData(
     ) {
         return new RealmPortalData(
                 owner,
+                ownerName,
                 portalId,
                 origin.dimension(),
                 origin.pos(),
                 destination.dimension(),
                 destination.pos(),
                 state,
+                createdGameTime,
                 expirationGameTime.map(OptionalLong::of).orElseGet(OptionalLong::empty),
                 realmPopulation,
                 portalPrimaryColor,
@@ -102,12 +114,14 @@ public record RealmPortalData(
     public RealmPortalData closing(long expirationGameTime) {
         return new RealmPortalData(
                 owner,
+                ownerName,
                 portalId,
                 originDimension,
                 originPosition,
                 destinationDimension,
                 destinationPosition,
                 RealmPortalState.CLOSING,
+                createdGameTime,
                 OptionalLong.of(expirationGameTime),
                 realmPopulation,
                 portalPrimaryColor,
@@ -118,12 +132,14 @@ public record RealmPortalData(
     public RealmPortalData closed() {
         return new RealmPortalData(
                 owner,
+                ownerName,
                 portalId,
                 originDimension,
                 originPosition,
                 destinationDimension,
                 destinationPosition,
                 RealmPortalState.CLOSED,
+                createdGameTime,
                 OptionalLong.empty(),
                 0,
                 portalPrimaryColor,
@@ -134,12 +150,14 @@ public record RealmPortalData(
     public RealmPortalData openWithPopulation(int population) {
         return new RealmPortalData(
                 owner,
+                ownerName,
                 portalId,
                 originDimension,
                 originPosition,
                 destinationDimension,
                 destinationPosition,
                 RealmPortalState.OPEN,
+                createdGameTime,
                 OptionalLong.empty(),
                 population,
                 portalPrimaryColor,
@@ -150,12 +168,14 @@ public record RealmPortalData(
     public RealmPortalData withPopulation(int population) {
         return new RealmPortalData(
                 owner,
+                ownerName,
                 portalId,
                 originDimension,
                 originPosition,
                 destinationDimension,
                 destinationPosition,
                 state,
+                createdGameTime,
                 expirationGameTime,
                 population,
                 portalPrimaryColor,
