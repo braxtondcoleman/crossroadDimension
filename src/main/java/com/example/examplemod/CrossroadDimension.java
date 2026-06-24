@@ -3,6 +3,10 @@ package com.example.examplemod;
 import org.slf4j.Logger;
 
 import com.example.examplemod.network.TravelNetwork;
+import com.example.examplemod.portal.CrossroadsGateBlock;
+import com.example.examplemod.portal.RealmPortalManager;
+import com.example.examplemod.portal.RealmPortalRuntime;
+import com.example.examplemod.realm.PocketRealmManager;
 import com.mojang.logging.LogUtils;
 
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -15,7 +19,6 @@ import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.material.MapColor;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
@@ -26,7 +29,10 @@ import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
+import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.server.ServerStartingEvent;
+import net.neoforged.neoforge.event.tick.PlayerTickEvent;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.registries.DeferredBlock;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredItem;
@@ -50,6 +56,12 @@ public class CrossroadDimension {
     public static final DeferredBlock<Block> EXAMPLE_BLOCK = BLOCKS.registerSimpleBlock("example_block", p -> p.mapColor(MapColor.STONE));
     // Creates a new BlockItem with the id "CrossroadDimension:example_block", combining the namespace and path
     public static final DeferredItem<BlockItem> EXAMPLE_BLOCK_ITEM = ITEMS.registerSimpleBlockItem("example_block", EXAMPLE_BLOCK);
+    public static final DeferredBlock<Block> CROSSROADS_GATE = BLOCKS.registerBlock(
+            "crossroads_gate",
+            CrossroadsGateBlock::new,
+            properties -> properties.mapColor(MapColor.COLOR_PURPLE).noCollision().lightLevel(state -> 10).strength(-1.0F, 3600000.0F)
+    );
+    public static final DeferredItem<BlockItem> CROSSROADS_GATE_ITEM = ITEMS.registerSimpleBlockItem("crossroads_gate", CROSSROADS_GATE);
 
     // Creates a new food item with the id "CrossroadDimension:example_id", nutrition 1 and saturation 2
     public static final DeferredItem<Item> EXAMPLE_ITEM = ITEMS.registerSimpleItem("example_item", p -> p.food(new FoodProperties.Builder()
@@ -107,6 +119,7 @@ public class CrossroadDimension {
     private void addCreative(BuildCreativeModeTabContentsEvent event) {
         if (event.getTabKey() == CreativeModeTabs.BUILDING_BLOCKS) {
             event.accept(EXAMPLE_BLOCK_ITEM);
+            event.accept(CROSSROADS_GATE_ITEM);
         }
     }
 
@@ -115,5 +128,21 @@ public class CrossroadDimension {
     public void onServerStarting(ServerStartingEvent event) {
         // Do something when the server starts
         LOGGER.info("HELLO from server starting");
+    }
+
+    @SubscribeEvent
+    public void onServerStarted(ServerStartedEvent event) {
+        new PocketRealmManager().initialize(event.getServer());
+        new RealmPortalManager().initialize(event.getServer());
+    }
+
+    @SubscribeEvent
+    public void onPlayerTick(PlayerTickEvent.Post event) {
+        RealmPortalRuntime.onPlayerTick(event);
+    }
+
+    @SubscribeEvent
+    public void onServerTick(ServerTickEvent.Post event) {
+        RealmPortalRuntime.onServerTick(event);
     }
 }

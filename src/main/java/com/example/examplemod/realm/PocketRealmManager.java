@@ -1,12 +1,12 @@
 package com.example.examplemod.realm;
 
 import com.example.examplemod.CrossroadDimension;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import net.commoble.infiniverse.api.InfiniverseAPI;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.GlobalPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
@@ -25,26 +25,55 @@ import net.minecraft.world.level.levelgen.FlatLevelSource;
 import net.minecraft.world.level.levelgen.flat.FlatLayerInfo;
 import net.minecraft.world.level.levelgen.flat.FlatLevelGeneratorSettings;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
-import net.minecraft.world.level.levelgen.structure.StructureSet;
 
 public class PocketRealmManager {
     private static final String DIMENSION_PATH_PREFIX = "pocket_realm/";
-    private final Map<UUID, PocketRealmData> knownRealms = new HashMap<>();
+    private static final BlockPos PLATFORM_CENTER = new BlockPos(0, 80, 0);
+    private static final int PLATFORM_RADIUS = 2;
+    private static final int TELEPORT_Y_OFFSET = 1;
 
     public Optional<PocketRealmData> findRealm(ServerPlayer player) {
-        return findRealm(player.getUUID());
+        return findRealm(player.level().getServer(), player.getUUID());
     }
 
-    public Optional<PocketRealmData> findRealm(UUID owner) {
-        return Optional.ofNullable(knownRealms.get(owner));
+    public Optional<PocketRealmData> findRealm(MinecraftServer server, UUID owner) {
+        return savedData(server).find(owner);
     }
 
     public PocketRealmData createRealmSkeleton(ServerPlayer owner) {
         CrossroadDimension.LOGGER.info("Creating pocket realm metadata for {}", owner.getGameProfile().name());
         PocketRealmData realm = PocketRealmData.uncreated(owner.getUUID(), levelKeyFor(owner.getUUID()));
-        knownRealms.put(owner.getUUID(), realm);
+        saveRealm(owner.level().getServer(), realm);
         CrossroadDimension.LOGGER.info("Pocket realm metadata uses dimension key {}", realm.levelKey().identifier());
         return realm;
+    }
+
+    public PocketRealmData saveReturnLocation(ServerPlayer player, PocketRealmData realm) {
+        GlobalPos returnLocation = GlobalPos.of(player.level().dimension(), player.blockPosition());
+        PocketRealmData updatedRealm = realm.withReturnLocation(returnLocation);
+        saveRealm(player.level().getServer(), updatedRealm);
+        CrossroadDimension.LOGGER.info(
+                "Saved return location for {}: {} at {}",
+                player.getGameProfile().name(),
+                returnLocation.dimension().identifier(),
+                returnLocation.pos()
+        );
+        return updatedRealm;
+    }
+
+    public void initialize(MinecraftServer server) {
+        PocketRealmSavedData data = savedData(server);
+        CrossroadDimension.LOGGER.info("Pocket realm SavedData loaded with {} realm(s)", data.size());
+    }
+
+    private void saveRealm(MinecraftServer server, PocketRealmData realm) {
+        PocketRealmSavedData data = savedData(server);
+        data.put(realm);
+        CrossroadDimension.LOGGER.info("Pocket realm saved: owner={}, dimension={}", realm.owner(), realm.levelKey().identifier());
+    }
+
+    private PocketRealmSavedData savedData(MinecraftServer server) {
+        return server.getDataStorage().computeIfAbsent(PocketRealmSavedData.TYPE);
     }
 
     public ServerLevel ensureRealmLoaded(MinecraftServer server, PocketRealmData realm) {
@@ -62,8 +91,64 @@ public class PocketRealmManager {
         return createdLevel;
     }
 
+    public BlockPos ensureSpawnPlatform(ServerLevel realmLevel) {
+        CrossroadDimension.LOGGER.info("Ensuring spawn platform exists in {}", realmLevel.dimension().identifier());
+
+        if (realmLevel.getBlockState(PLATFORM_CENTER).is(Blocks.SMOOTH_STONE)) {
+            CrossroadDimension.LOGGER.info("Spawn platform already exists at {}", PLATFORM_CENTER);
+            return PLATFORM_CENTER.above(TELEPORT_Y_OFFSET);
+        }
+
+        CrossroadDimension.LOGGER.info("Creating spawn platform centered at {}", PLATFORM_CENTER);
+        for (int x = -PLATFORM_RADIUS; x <= PLATFORM_RADIUS; x++) {
+            for (int z = -PLATFORM_RADIUS; z <= PLATFORM_RADIUS; z++) {
+                BlockPos platformPos = PLATFORM_CENTER.offset(x, 0, z);
+                realmLevel.setBlockAndUpdate(platformPos, Blocks.SMOOTH_STONE.defaultBlockState());
+            }
+        }
+
+        BlockPos spawnPos = PLATFORM_CENTER.above(TELEPORT_Y_OFFSET);
+        realmLevel.setBlockAndUpdate(spawnPos, Blocks.AIR.defaultBlockState());
+        realmLevel.setBlockAndUpdate(spawnPos.above(), Blocks.AIR.defaultBlockState());
+        CrossroadDimension.LOGGER.info("Spawn platform ready; arrival position is {}", spawnPos);
+        return spawnPos;
+    }
+
+    public void teleportTo(ServerPlayer player, ServerLevel targetLevel, BlockPos targetPos) {
+        CrossroadDimension.LOGGER.info(
+                "Teleporting {} to {} at {}",
+                player.getGameProfile().name(),
+                targetLevel.dimension().identifier(),
+                targetPos
+        );
+
+        boolean teleported = player.teleportTo(
+                targetLevel,
+                targetPos.getX() + 0.5D,
+                targetPos.getY(),
+                targetPos.getZ() + 0.5D,
+                java.util.Set.of(),
+                player.getYRot(),
+                player.getXRot(),
+                true
+        );
+
+        CrossroadDimension.LOGGER.info("Teleport result for {}: {}", player.getGameProfile().name(), teleported);
+    }
+
+    public Optional<ServerLevel> resolveReturnLevel(MinecraftServer server, PocketRealmData realm) {
+        return realm.lastReturnLocation()
+                .map(GlobalPos::dimension)
+                .map(server::getLevel);
+    }
+
     public Identifier dimensionIdFor(UUID owner) {
         return Identifier.fromNamespaceAndPath(CrossroadDimension.MODID, DIMENSION_PATH_PREFIX + owner);
+    }
+
+    public boolean isPocketRealmDimension(ResourceKey<Level> levelKey) {
+        Identifier id = levelKey.identifier();
+        return id.getNamespace().equals(CrossroadDimension.MODID) && id.getPath().startsWith(DIMENSION_PATH_PREFIX);
     }
 
     public ResourceKey<Level> levelKeyFor(UUID owner) {

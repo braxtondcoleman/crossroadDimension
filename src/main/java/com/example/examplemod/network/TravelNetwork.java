@@ -5,7 +5,6 @@ import com.example.examplemod.realm.PocketRealmManager;
 import com.example.examplemod.realm.PocketRealmService;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
@@ -33,9 +32,9 @@ public class TravelNetwork {
                     pos.getY(),
                     pos.getZ()
             );
-            ServerLevel realm = POCKET_REALM_SERVICE.requestTravelToRealm(serverPlayer);
-            CrossroadDimension.LOGGER.info("Pocket dimension ready for {}: {}", serverPlayer.getGameProfile().name(), realm.dimension().identifier());
-            serverPlayer.sendSystemMessage(Component.literal("Pocket realm created/loaded: " + realm.dimension().identifier()));
+            Component resultMessage = POCKET_REALM_SERVICE.requestTravel(serverPlayer);
+            CrossroadDimension.LOGGER.info("Pocket dimension travel completed for {}: {}", serverPlayer.getGameProfile().name(), resultMessage.getString());
+            serverPlayer.sendSystemMessage(resultMessage);
         }
     }
 }
