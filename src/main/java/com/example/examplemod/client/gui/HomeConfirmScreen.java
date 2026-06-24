@@ -1,18 +1,16 @@
 package com.example.examplemod.client.gui;
 
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
-import com.example.examplemod.client.gui.CountdownScreen;
-
-
 
 public class HomeConfirmScreen extends Screen {
 
     public HomeConfirmScreen() {
-        super(Component.literal("Travel to your Sanctuary?"));
+        super(Component.literal("Travel to your Realm?"));
     }
 
     @Override
@@ -49,28 +47,40 @@ public class HomeConfirmScreen extends Screen {
         minecraft.setScreen(null);
     }
 
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-
-        // Y = accept
-        if (keyCode == GLFW.GLFW_KEY_Y) {
-            onAccept();
-            return true;
-        }
-
-        // N = cancel
-        if (keyCode == GLFW.GLFW_KEY_N) {
-            onCancel();
-            return true;
-        }
-
-        // Any other key closes the menu
-        onCancel();
-        return true;
-    }
-
     @Override
     public void onClose() {
         onCancel();
+    }
+
+    @Override
+    public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+    }
+
+    @Override
+    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+        super.extractRenderState(graphics, mouseX, mouseY, partialTick);
+
+        int centerX = width / 2;
+        int centerY = height / 2;
+        int panelWidth = 190;
+        int panelHeight = 72;
+        int panelX = centerX - panelWidth / 2;
+        int panelY = centerY - 40;
+
+        graphics.fill(panelX, panelY, panelX + panelWidth, panelY + panelHeight, 0xAA100A18);
+        graphics.outline(panelX, panelY, panelWidth, panelHeight, 0xCCB78CFF);
+        graphics.centeredText(font, Component.literal("Travel to your Realm?"), centerX, centerY - 28, 0xFFEDE6FF);
+        graphics.centeredText(font, Component.literal("Press Y or click Yes"), centerX, centerY - 14, 0xFFCBBDE8);
+    }
+
+    @Override
+    public boolean isPauseScreen() {
+        return false;
+    }
+
+    @Override
+    public boolean isInGameUi() {
+        return true;
     }
 
     @Override
@@ -78,11 +88,6 @@ public class HomeConfirmScreen extends Screen {
 
         if (event.key() == GLFW.GLFW_KEY_Y) {
             onAccept();
-            return true;
-        }
-
-        if (event.key() == GLFW.GLFW_KEY_N) {
-            onCancel();
             return true;
         }
 

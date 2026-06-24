@@ -2,6 +2,7 @@ package com.example.examplemod;
 
 import org.slf4j.Logger;
 
+import com.example.examplemod.network.TravelNetwork;
 import com.mojang.logging.LogUtils;
 
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -68,6 +69,7 @@ public class CrossroadDimension {
     public CrossroadDimension(IEventBus modEventBus, ModContainer modContainer) {
         // Register the commonSetup method for modloading
         modEventBus.addListener(this::commonSetup);
+        modEventBus.addListener(TravelNetwork::register);
 
         // Register the Deferred Register to the mod event bus so blocks get registered
         BLOCKS.register(modEventBus);
