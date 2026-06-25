@@ -2,13 +2,13 @@ package com.example.examplemod.portal;
 
 import com.example.examplemod.CrossroadDimension;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
+import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
@@ -20,16 +20,11 @@ import net.minecraft.world.phys.AABB;
 
 public class RealmPortalManager {
     public static final int MIN_GATE_SPACING_RADIUS = 16;
-    private static final int REFORM_ANIMATION_TICKS = 20;
-    private static final int REFORM_TO_SLAM_PAUSE_TICKS = 5;
-    private static final int IDLE_LOOP_TICKS = 160;
-    private static final int SLAM_ANIMATION_TICKS = 45;
-    private static final int SLAM_START_TICKS = REFORM_ANIMATION_TICKS + REFORM_TO_SLAM_PAUSE_TICKS + IDLE_LOOP_TICKS;
-    private static final int PORTAL_EFFECT_START_TICKS = SLAM_START_TICKS + SLAM_ANIMATION_TICKS;
-    private static final int PORTAL_FADE_PARTICLE_TICKS = 10;
-    private static final int CLOSING_REMOVE_TICKS = REFORM_ANIMATION_TICKS + REFORM_TO_SLAM_PAUSE_TICKS;
     private static final long CLOSING_EXPIRATION_TICKS = 2400L;
+    private static final long TIMEOUT_DEBUG_INTERVAL_TICKS = 200L;
+    private static final String LABEL_TAG_PREFIX = CrossroadDimension.MODID + ".portal_label.";
     private static final Map<UUID, Long> CLOSING_EFFECT_STARTS = new HashMap<>();
+    private static final Map<String, Long> TIMEOUT_DEBUG_LOGS = new HashMap<>();
 
     public RealmPortalData createPortal(
             MinecraftServer server,
@@ -43,9 +38,11 @@ public class RealmPortalManager {
         RealmPortalData portal = RealmPortalData.create(owner, ownerName, portalId, origin, destination, server.overworld().getGameTime(), expirationGameTime);
         savedData(server).put(portal);
         CrossroadDimension.LOGGER.info(
-                "Created realm portal {} for owner {} from {} at {} to {} at {}",
+                "Created realm portal {} for owner {} outsideState={} realmState={} from {} at {} to {} at {}",
                 portalId,
                 owner,
+                portal.outsideState(),
+                portal.realmState(),
                 origin.dimension().identifier(),
                 origin.pos(),
                 destination.dimension().identifier(),
@@ -54,11 +51,7 @@ public class RealmPortalManager {
         return portal;
     }
 
-    public Optional<RealmPortalData> createActiveGate(
-            ServerPlayer owner,
-            GlobalPos origin,
-            GlobalPos destination
-    ) {
+    public Optional<RealmPortalData> createActiveGate(ServerPlayer owner, GlobalPos origin, GlobalPos destination) {
         MinecraftServer server = owner.level().getServer();
         CrossroadDimension.LOGGER.info(
                 "Validating active gate placement for {} at {} {} with radius {}",
@@ -74,12 +67,7 @@ public class RealmPortalManager {
             return Optional.empty();
         }
 
-        savedData(server).findActiveForOwner(owner.getUUID()).ifPresent(oldPortal -> {
-            CrossroadDimension.LOGGER.info("Relocating active gate for {}; closing old portal {}", owner.getGameProfile().name(), oldPortal.portalId());
-            removeGateBlocks(server, oldPortal);
-            removeGateLabels(server, oldPortal);
-            savedData(server).put(oldPortal.closed());
-        });
+        savedData(server).findActiveForOwner(owner.getUUID()).ifPresent(oldPortal -> relocateOldGate(server, owner, oldPortal));
 
         boolean destinationWasSealed = hasGateColumn(server, destination);
         RealmPortalData portal = createPortal(server, owner.getUUID(), owner.getGameProfile().name(), origin, destination, OptionalLong.empty());
@@ -98,42 +86,145 @@ public class RealmPortalManager {
     public Optional<RealmPortalData> closePortal(MinecraftServer server, UUID portalId, long expirationGameTime) {
         Optional<RealmPortalData> existing = getPortal(server, portalId);
         existing.ifPresent(portal -> {
-            RealmPortalData closingPortal = portal.closing(expirationGameTime);
+            RealmPortalData closingPortal = portal.outsideClosing(expirationGameTime);
             savedData(server).put(closingPortal);
             CrossroadDimension.LOGGER.info(
-                    "Portal {} state transition {} -> CLOSING; expiration game time {}",
+                    "Portal {} outside state transition {} -> CLOSING; expiration game time {}",
                     portalId,
-                    portal.state(),
+                    portal.outsideState(),
                     expirationGameTime
             );
         });
-        return existing.map(portal -> portal.closing(expirationGameTime));
+        return existing.map(portal -> portal.outsideClosing(expirationGameTime));
     }
 
-    public boolean isPortalExpired(RealmPortalData portal, long currentGameTime) {
-        return portal.expirationGameTime().isPresent()
-                && currentGameTime >= portal.expirationGameTime().getAsLong();
+    public boolean isPortalReadyForTravel(RealmPortalData portal, boolean fromOrigin) {
+        RealmPortalState state = fromOrigin ? portal.outsideState() : portal.realmState();
+        return state == RealmPortalState.OPEN || state == RealmPortalState.CLOSING;
     }
 
-    public boolean isPortalReadyForTravel(MinecraftServer server, RealmPortalData portal) {
-        return portal.state() == RealmPortalState.CLOSING
-                || server.overworld().getGameTime() - portal.createdGameTime() >= PORTAL_EFFECT_START_TICKS;
+    public void touchPortalUse(MinecraftServer server, UUID portalId, boolean fromOrigin) {
+        getPortal(server, portalId).ifPresent(portal -> {
+            RealmPortalData updated = portal;
+            if (fromOrigin && portal.outsideState() == RealmPortalState.CLOSING) {
+                updated = updated.withOutsideState(RealmPortalState.OPEN, OptionalLong.empty());
+                CrossroadDimension.LOGGER.info("Portal {} outside timeout reset: CLOSING -> OPEN", portalId);
+            }
+            if (portal.realmState() == RealmPortalState.CLOSING) {
+                updated = updated.withRealmState(RealmPortalState.OPEN, OptionalLong.empty());
+                CLOSING_EFFECT_STARTS.remove(portalId);
+                CrossroadDimension.LOGGER.info("Portal {} realm timeout reset: CLOSING -> OPEN", portalId);
+            }
+            clearTimeoutDebug(portalId);
+            savedData(server).put(updated);
+        });
     }
 
-    public void touchPortalUse(MinecraftServer server, UUID portalId) {
-        getPortal(server, portalId)
-                .filter(portal -> portal.state() == RealmPortalState.CLOSING)
-                .ifPresent(portal -> {
-                    RealmPortalData reopened = portal.openWithPopulation(portal.realmPopulation());
-                    savedData(server).put(reopened);
-                    CLOSING_EFFECT_STARTS.remove(portal.portalId());
-                    CrossroadDimension.LOGGER.info(
-                            "Portal {} use detected while closing; timeout reset and state {} -> {}",
-                            portal.portalId(),
-                            portal.state(),
-                            reopened.state()
-                    );
-                });
+    public void handleCrystalSlamComplete(MinecraftServer server, GlobalPos crystalPos) {
+        for (RealmPortalData portal : savedData(server).all()) {
+            if (sameColumn(portal.origin(), crystalPos)) {
+                handleOutsideSlamComplete(server, portal);
+                return;
+            }
+            if (sameColumn(portal.destination(), crystalPos)) {
+                handleRealmSlamComplete(server, portal);
+                return;
+            }
+        }
+        CrossroadDimension.LOGGER.info("Crystal slam completion ignored at {}; no linked portal found", crystalPos);
+    }
+
+    public void handleCrystalReformComplete(MinecraftServer server, GlobalPos crystalPos) {
+        for (RealmPortalData portal : savedData(server).all()) {
+            if (sameColumn(portal.destination(), crystalPos)) {
+                RealmPortalData sealed = portal.realmSealed();
+                savedData(server).put(sealed);
+                CLOSING_EFFECT_STARTS.remove(portal.portalId());
+                clearTimeoutDebug(portal.portalId());
+                CrossroadDimension.LOGGER.info(
+                        "Portal {} realm state transition {} -> SEALED after crystal reform completion",
+                        portal.portalId(),
+                        portal.realmState()
+                );
+                return;
+            }
+        }
+        CrossroadDimension.LOGGER.info("Crystal reform completion ignored at {}; no linked portal found", crystalPos);
+    }
+
+    public boolean tryReopenSealedRealm(ServerPlayer player, GlobalPos anchorPos) {
+        MinecraftServer server = player.level().getServer();
+        for (RealmPortalData portal : savedData(server).all()) {
+            if (sameColumn(portal.destination(), anchorPos) && portal.realmState() == RealmPortalState.SEALED) {
+                RealmPortalData opening = portal.withRealmState(RealmPortalState.OPENING, OptionalLong.empty());
+                savedData(server).put(opening);
+                triggerCrystalSlam(server, portal.destination());
+                player.sendSystemMessage(Component.literal("Crossroads gate reopening."));
+                CrossroadDimension.LOGGER.info(
+                        "Portal {} sealed realm anchor used by {}; realm SEALED -> OPENING; slam triggered",
+                        portal.portalId(),
+                        player.getGameProfile().name()
+                );
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public PortalDebugInfo debugInfo(MinecraftServer server) {
+        RealmPortalSavedData data = savedData(server);
+        long opening = 0L;
+        long open = 0L;
+        long closing = 0L;
+        long closed = 0L;
+        long sealedCrystals = 0L;
+
+        for (RealmPortalData portal : data.all()) {
+            if (portal.outsideState() == RealmPortalState.OPENING || portal.realmState() == RealmPortalState.OPENING) {
+                opening++;
+            }
+            if (portal.outsideState() == RealmPortalState.OPEN || portal.realmState() == RealmPortalState.OPEN) {
+                open++;
+            }
+            if (portal.outsideState() == RealmPortalState.CLOSING || portal.realmState() == RealmPortalState.CLOSING) {
+                closing++;
+            }
+            if (portal.outsideState() == RealmPortalState.CLOSED) {
+                closed++;
+            }
+            if (portal.realmState() == RealmPortalState.SEALED && hasGateColumn(server, portal.destination())) {
+                sealedCrystals++;
+            }
+        }
+
+        return new PortalDebugInfo(data.size(), opening, open, closing, closed, sealedCrystals, CLOSING_EFFECT_STARTS.size() + TIMEOUT_DEBUG_LOGS.size());
+    }
+
+    public PortalCleanupSummary cleanupAll(MinecraftServer server) {
+        RealmPortalSavedData data = savedData(server);
+        int portals = data.size();
+        int gateBlocks = 0;
+        int labels = 0;
+
+        for (RealmPortalData portal : data.all()) {
+            gateBlocks += removeGateColumn(server, portal.origin());
+            gateBlocks += removeGateColumn(server, portal.destination());
+            labels += removeGateLabels(server, portal);
+        }
+
+        labels += removeAllGateLabels(server);
+        int timers = CLOSING_EFFECT_STARTS.size() + TIMEOUT_DEBUG_LOGS.size();
+        CLOSING_EFFECT_STARTS.clear();
+        TIMEOUT_DEBUG_LOGS.clear();
+        data.clear();
+        CrossroadDimension.LOGGER.info(
+                "Crossroads cleanup complete: portals={}, gateBlocks={}, labels={}, timers={}",
+                portals,
+                gateBlocks,
+                labels,
+                timers
+        );
+        return new PortalCleanupSummary(portals, gateBlocks, labels, timers);
     }
 
     public void completeGateTravel(ServerPlayer player, RealmPortalData portal, boolean fromOrigin) {
@@ -161,49 +252,15 @@ public class RealmPortalManager {
         tickOpenPortalEffects(server, gameTime);
         tickClosingEffects(server, gameTime);
         for (RealmPortalData portal : savedData(server).all()) {
-            if (portal.state() == RealmPortalState.CLOSING
-                    && portal.expirationGameTime().isPresent()
-                    && !arePortalChunksLoaded(server, portal)) {
-                RealmPortalData paused = portal.closing(portal.expirationGameTime().getAsLong() + 1L);
-                savedData(server).put(paused);
-                CrossroadDimension.LOGGER.info(
-                        "Portal {} timeout paused because a gate chunk is not loaded; expiration extended to {}",
-                        portal.portalId(),
-                        paused.expirationGameTime().getAsLong()
-                );
-                continue;
-            }
-
-            if (portal.state() == RealmPortalState.CLOSING && portal.expirationGameTime().isPresent()) {
-                CrossroadDimension.LOGGER.info(
-                        "Checking portal {} expiration: now={}, expires={}, population={}",
-                        portal.portalId(),
-                        gameTime,
-                        portal.expirationGameTime().getAsLong(),
-                        portal.realmPopulation()
-                );
-            }
-
-            if (portal.state() == RealmPortalState.CLOSING
-                    && isPortalExpired(portal, gameTime)
-                    && !CLOSING_EFFECT_STARTS.containsKey(portal.portalId())) {
-                CrossroadDimension.LOGGER.info(
-                        "Portal {} expired at {}; starting physical closing collapse before CLOSED",
-                        portal.portalId(),
-                        gameTime
-                );
-                triggerCrystalReformToIdle(server, portal);
-                spawnGateParticles(server, portal, ParticleTypes.WITCH, 18);
-                removeTimedOutPortalVisuals(server, portal);
-                CLOSING_EFFECT_STARTS.put(portal.portalId(), gameTime);
-            }
+            tickOutsideTimeout(server, portal, gameTime);
+            tickRealmTimeout(server, getPortal(server, portal.portalId()).orElse(portal), gameTime);
         }
     }
 
     public void handlePlayerDisconnectedInRealm(ServerPlayer player) {
         MinecraftServer server = player.level().getServer();
         savedData(server).all().stream()
-                .filter(portal -> portal.state() != RealmPortalState.CLOSED)
+                .filter(portal -> portal.realmState() != RealmPortalState.SEALED)
                 .filter(portal -> portal.destinationDimension().equals(player.level().dimension()))
                 .findFirst()
                 .ifPresent(portal -> {
@@ -221,16 +278,18 @@ public class RealmPortalManager {
         CrossroadDimension.LOGGER.info("Realm portal SavedData loaded with {} portal(s)", data.size());
         for (RealmPortalData portal : data.all()) {
             CrossroadDimension.LOGGER.info(
-                    "Loaded portal {} owner={} state={} population={} expiration={}",
+                    "Loaded portal {} owner={} outsideState={} realmState={} population={} outsideExpiration={} realmExpiration={}",
                     portal.portalId(),
                     portal.owner(),
-                    portal.state(),
+                    portal.outsideState(),
+                    portal.realmState(),
                     portal.realmPopulation(),
-                    portal.expirationGameTime().isPresent() ? portal.expirationGameTime().getAsLong() : "none"
+                    portal.outsideExpirationGameTime().isPresent() ? portal.outsideExpirationGameTime().getAsLong() : "none",
+                    portal.realmExpirationGameTime().isPresent() ? portal.realmExpirationGameTime().getAsLong() : "none"
             );
-            if (portal.state() == RealmPortalState.CLOSED) {
-                CrossroadDimension.LOGGER.info("Cleaning closed portal visuals for {}", portal.portalId());
-                removeTimedOutPortalVisuals(server, portal);
+            if (portal.outsideState() == RealmPortalState.CLOSED) {
+                removeGateColumn(server, portal.origin());
+                removeGateLabel(server.getLevel(portal.originDimension()), portal.origin(), portal);
             }
         }
     }
@@ -239,19 +298,41 @@ public class RealmPortalManager {
         return server.getDataStorage().computeIfAbsent(RealmPortalSavedData.TYPE);
     }
 
+    private void relocateOldGate(MinecraftServer server, ServerPlayer owner, RealmPortalData oldPortal) {
+        CrossroadDimension.LOGGER.info(
+                "Relocating active gate for {}; old portal {} outsideState={} realmState={}",
+                owner.getGameProfile().name(),
+                oldPortal.portalId(),
+                oldPortal.outsideState(),
+                oldPortal.realmState()
+        );
+        removeGateColumn(server, oldPortal.origin());
+        removeGateLabel(server.getLevel(oldPortal.originDimension()), oldPortal.origin(), oldPortal);
+        if (oldPortal.realmState() != RealmPortalState.SEALED) {
+            removeGateColumn(server, oldPortal.destination());
+            removeGateLabel(server.getLevel(oldPortal.destinationDimension()), oldPortal.destination(), oldPortal);
+        }
+        savedData(server).put(oldPortal.closed());
+    }
+
     private void enterRealm(MinecraftServer server, RealmPortalData portal) {
         RealmPortalData latest = getPortal(server, portal.portalId()).orElse(portal);
         int previousPopulation = latest.realmPopulation();
         int population = previousPopulation + 1;
-        RealmPortalData updated = latest.openWithPopulation(population);
+        RealmPortalData updated = latest.withPopulation(population)
+                .withOutsideState(RealmPortalState.OPEN, OptionalLong.empty())
+                .withRealmState(RealmPortalState.OPEN, OptionalLong.empty());
         savedData(server).put(updated);
+        clearTimeoutDebug(latest.portalId());
         CrossroadDimension.LOGGER.info(
-                "Portal {} population {} -> {}; state {} -> {}; expiration cleared",
+                "Portal {} population {} -> {}; outside {} -> {}; realm {} -> {}; timeouts reset",
                 latest.portalId(),
                 previousPopulation,
                 population,
-                latest.state(),
-                updated.state()
+                latest.outsideState(),
+                updated.outsideState(),
+                latest.realmState(),
+                updated.realmState()
         );
     }
 
@@ -259,19 +340,29 @@ public class RealmPortalManager {
         RealmPortalData latest = getPortal(server, portal.portalId()).orElse(portal);
         int previousPopulation = latest.realmPopulation();
         int population = Math.max(0, previousPopulation - 1);
-        long expirationGameTime = server.overworld().getGameTime() + CLOSING_EXPIRATION_TICKS;
-        RealmPortalData updated = population == 0
-                ? latest.withPopulation(0).closing(expirationGameTime)
-                : latest.withPopulation(population);
+        RealmPortalData updated = latest.withPopulation(population);
+        if (population == 0) {
+            long expirationGameTime = server.overworld().getGameTime() + CLOSING_EXPIRATION_TICKS;
+            updated = updated.outsideClosing(expirationGameTime);
+            clearTimeoutDebug(latest.portalId());
+            CrossroadDimension.LOGGER.info(
+                    "Portal {} outside timeout created: now={} expires={} durationTicks={}",
+                    latest.portalId(),
+                    server.overworld().getGameTime(),
+                    expirationGameTime,
+                    CLOSING_EXPIRATION_TICKS
+            );
+        }
         savedData(server).put(updated);
         CrossroadDimension.LOGGER.info(
-                "Portal {} population {} -> {}; state {} -> {}; expiration={}",
+                "Portal {} population {} -> {}; outside {} -> {}; realm {} -> {}",
                 latest.portalId(),
                 previousPopulation,
                 population,
-                latest.state(),
-                updated.state(),
-                updated.expirationGameTime().isPresent() ? updated.expirationGameTime().getAsLong() : "none"
+                latest.outsideState(),
+                updated.outsideState(),
+                latest.realmState(),
+                updated.realmState()
         );
     }
 
@@ -296,14 +387,14 @@ public class RealmPortalManager {
 
         int nearbyPortalCount = 0;
         for (RealmPortalData portal : savedData(server).all()) {
-            if (portal.state() != RealmPortalState.CLOSED && portal.originDimension().equals(origin.dimension())) {
+            if (portal.outsideState() != RealmPortalState.CLOSED && portal.originDimension().equals(origin.dimension())) {
                 double distance = horizontalDistance(portal.originPosition(), pos);
                 boolean withinRadius = distance < MIN_GATE_SPACING_RADIUS;
                 CrossroadDimension.LOGGER.info(
-                        "Gate radius check against portal {} owner={} state={} origin={} distance={} withinRadius={}",
+                        "Gate radius check against portal {} owner={} outsideState={} origin={} distance={} withinRadius={}",
                         portal.portalId(),
                         portal.owner(),
-                        portal.state(),
+                        portal.outsideState(),
                         portal.originPosition(),
                         String.format(java.util.Locale.ROOT, "%.2f", distance),
                         withinRadius
@@ -316,7 +407,7 @@ public class RealmPortalManager {
         CrossroadDimension.LOGGER.info("Gate placement nearby active portal count within radius: {}", nearbyPortalCount);
 
         for (RealmPortalData portal : savedData(server).all()) {
-            if (portal.state() != RealmPortalState.CLOSED
+            if (portal.outsideState() != RealmPortalState.CLOSED
                     && portal.originDimension().equals(origin.dimension())
                     && horizontalDistance(portal.originPosition(), pos) < MIN_GATE_SPACING_RADIUS) {
                 CrossroadDimension.LOGGER.info(
@@ -343,81 +434,121 @@ public class RealmPortalManager {
         } else {
             triggerCrystalOpening(server, portal.destination());
         }
-        CrossroadDimension.LOGGER.info("Placed gate blocks for portal {}", portal.portalId());
+        CrossroadDimension.LOGGER.info(
+                "Placed gate blocks for portal {}; outsideState={} realmState={}",
+                portal.portalId(),
+                portal.outsideState(),
+                portal.realmState()
+        );
     }
 
-    private void placeGateColumn(MinecraftServer server, GlobalPos pos) {
-        ServerLevel level = server.getLevel(pos.dimension());
-        if (level != null) {
-            if (!level.getBlockState(pos.pos()).is(CrossroadDimension.CROSSROADS_GATE.get())) {
-                level.setBlockAndUpdate(pos.pos(), CrossroadDimension.CROSSROADS_GATE.get().defaultBlockState().setValue(CrossroadsGateBlock.ANCHOR, true));
-            }
-            if (!level.getBlockState(pos.pos().above()).is(CrossroadDimension.CROSSROADS_GATE.get())) {
-                level.setBlockAndUpdate(pos.pos().above(), CrossroadDimension.CROSSROADS_GATE.get().defaultBlockState().setValue(CrossroadsGateBlock.ANCHOR, false));
-            }
+    private void handleOutsideSlamComplete(MinecraftServer server, RealmPortalData portal) {
+        if (portal.outsideState() != RealmPortalState.OPENING) {
+            CrossroadDimension.LOGGER.info(
+                    "Portal {} outside slam completion ignored; outsideState={}",
+                    portal.portalId(),
+                    portal.outsideState()
+            );
+            return;
         }
+
+        RealmPortalData opened = portal.outsideOpen();
+        savedData(server).put(opened);
+        spawnColumnParticles(server, opened.origin(), ParticleTypes.REVERSE_PORTAL, 28);
+        CrossroadDimension.LOGGER.info(
+                "Portal {} outside slam completion trigger: OPENING -> OPEN; portal effects started",
+                portal.portalId()
+        );
     }
 
-    private void removeGateBlocks(MinecraftServer server, RealmPortalData portal) {
-        CrossroadDimension.LOGGER.info("Removing physical gate blocks for portal {}", portal.portalId());
-        removeGateColumn(server, portal.origin());
-        removeGateColumn(server, portal.destination());
-        removeGateLabels(server, portal);
-    }
-
-    private void removeTimedOutPortalVisuals(MinecraftServer server, RealmPortalData portal) {
-        CrossroadDimension.LOGGER.info("Removing timed-out portal visuals for {}; preserving sealed realm crystal", portal.portalId());
-        removeGateColumn(server, portal.origin());
-        removeGateLabels(server, portal);
-    }
-
-    private void removeGateColumn(MinecraftServer server, GlobalPos pos) {
-        ServerLevel level = server.getLevel(pos.dimension());
-        if (level != null) {
-            if (level.getBlockState(pos.pos()).is(CrossroadDimension.CROSSROADS_GATE.get())) {
-                level.setBlockAndUpdate(pos.pos(), Blocks.AIR.defaultBlockState());
-                CrossroadDimension.LOGGER.info("Removed gate block at {} {}", pos.dimension().identifier(), pos.pos());
-            } else {
-                CrossroadDimension.LOGGER.info("No gate block to remove at {} {}", pos.dimension().identifier(), pos.pos());
-            }
-            if (level.getBlockState(pos.pos().above()).is(CrossroadDimension.CROSSROADS_GATE.get())) {
-                level.setBlockAndUpdate(pos.pos().above(), Blocks.AIR.defaultBlockState());
-                CrossroadDimension.LOGGER.info("Removed gate block at {} {}", pos.dimension().identifier(), pos.pos().above());
-            } else {
-                CrossroadDimension.LOGGER.info("No gate block to remove at {} {}", pos.dimension().identifier(), pos.pos().above());
-            }
-        } else {
-            CrossroadDimension.LOGGER.info("Cannot remove gate column at {}; level is not loaded", pos.dimension().identifier());
+    private void handleRealmSlamComplete(MinecraftServer server, RealmPortalData portal) {
+        if (portal.realmState() == RealmPortalState.OPEN) {
+            CrossroadDimension.LOGGER.info("Portal {} realm slam completion ignored; realm already OPEN", portal.portalId());
+            return;
         }
-    }
 
-    private boolean hasGateColumn(MinecraftServer server, GlobalPos pos) {
-        ServerLevel level = server.getLevel(pos.dimension());
-        return level != null && level.getBlockState(pos.pos()).is(CrossroadDimension.CROSSROADS_GATE.get());
-    }
-
-    private boolean arePortalChunksLoaded(MinecraftServer server, RealmPortalData portal) {
-        return isChunkLoaded(server, portal.origin()) && isChunkLoaded(server, portal.destination());
-    }
-
-    private boolean isChunkLoaded(MinecraftServer server, GlobalPos pos) {
-        ServerLevel level = server.getLevel(pos.dimension());
-        return level != null && level.hasChunkAt(pos.pos());
+        RealmPortalData opened = portal.realmOpen();
+        savedData(server).put(opened);
+        CLOSING_EFFECT_STARTS.remove(portal.portalId());
+        clearTimeoutDebug(portal.portalId());
+        spawnColumnParticles(server, opened.destination(), ParticleTypes.REVERSE_PORTAL, 28);
+        CrossroadDimension.LOGGER.info(
+                "Portal {} realm slam completion trigger: {} -> OPEN; portal effects started",
+                portal.portalId(),
+                portal.realmState()
+        );
     }
 
     private void tickOpenPortalEffects(MinecraftServer server, long gameTime) {
         for (RealmPortalData portal : savedData(server).all()) {
-            if (portal.state() == RealmPortalState.OPEN) {
-                long age = gameTime - portal.createdGameTime();
-                if (age == SLAM_START_TICKS) {
-                    triggerCrystalSlam(server, portal);
-                } else if (age == PORTAL_EFFECT_START_TICKS) {
-                    spawnGateParticles(server, portal, ParticleTypes.REVERSE_PORTAL, 28);
-                    CrossroadDimension.LOGGER.info("Portal {} effect appeared on crystal slam impact frame", portal.portalId());
-                } else if (age > PORTAL_EFFECT_START_TICKS && gameTime % 10L == 0L) {
-                    spawnGateParticles(server, portal, ParticleTypes.END_ROD, 4);
-                }
+            if ((portal.outsideState() == RealmPortalState.OPEN || portal.outsideState() == RealmPortalState.CLOSING) && gameTime % 10L == 0L) {
+                spawnColumnParticles(server, portal.origin(), ParticleTypes.END_ROD, 4);
             }
+            if ((portal.realmState() == RealmPortalState.OPEN || portal.realmState() == RealmPortalState.CLOSING) && gameTime % 10L == 0L) {
+                spawnColumnParticles(server, portal.destination(), ParticleTypes.END_ROD, 4);
+            }
+
+            RealmPortalData updated = portal;
+            if (portal.outsideState() == RealmPortalState.OPEN && portal.realmPopulation() == 0 && portal.outsideExpirationGameTime().isEmpty()) {
+                long expiration = gameTime + CLOSING_EXPIRATION_TICKS;
+                updated = updated.outsideClosing(expiration);
+                CrossroadDimension.LOGGER.info("Portal {} outside OPEN -> CLOSING; expiration={}", portal.portalId(), expiration);
+            }
+            if (updated.realmState() == RealmPortalState.OPEN && updated.realmExpirationGameTime().isEmpty()) {
+                long expiration = gameTime + CLOSING_EXPIRATION_TICKS;
+                updated = updated.realmClosing(expiration);
+                CrossroadDimension.LOGGER.info("Portal {} realm OPEN -> CLOSING; expiration={}", portal.portalId(), expiration);
+            }
+            if (updated != portal) {
+                savedData(server).put(updated);
+                clearTimeoutDebug(portal.portalId());
+            }
+        }
+    }
+
+    private void tickOutsideTimeout(MinecraftServer server, RealmPortalData portal, long gameTime) {
+        if (portal.outsideState() != RealmPortalState.CLOSING || portal.outsideExpirationGameTime().isEmpty()) {
+            return;
+        }
+        if (!isChunkLoaded(server, portal.origin())) {
+            RealmPortalData paused = portal.outsideClosing(portal.outsideExpirationGameTime().getAsLong() + 1L);
+            savedData(server).put(paused);
+            if (gameTime % TIMEOUT_DEBUG_INTERVAL_TICKS == 0L) {
+                CrossroadDimension.LOGGER.info("Portal {} outside timeout paused; origin chunk unloaded", portal.portalId());
+            }
+            return;
+        }
+        logTimeoutStatus(portal, "outside", portal.outsideExpirationGameTime().getAsLong(), gameTime);
+        if (gameTime >= portal.outsideExpirationGameTime().getAsLong()) {
+            removeGateColumn(server, portal.origin());
+            removeGateLabel(server.getLevel(portal.originDimension()), portal.origin(), portal);
+            RealmPortalData closed = portal.outsideClosed();
+            savedData(server).put(closed);
+            clearTimeoutDebug(portal.portalId(), "outside");
+            CrossroadDimension.LOGGER.info("Portal {} outside timeout expired: CLOSING -> CLOSED", portal.portalId());
+        }
+    }
+
+    private void tickRealmTimeout(MinecraftServer server, RealmPortalData portal, long gameTime) {
+        if (portal.realmState() != RealmPortalState.CLOSING || portal.realmExpirationGameTime().isEmpty()) {
+            return;
+        }
+        if (!isChunkLoaded(server, portal.destination())) {
+            RealmPortalData paused = portal.realmClosing(portal.realmExpirationGameTime().getAsLong() + 1L);
+            savedData(server).put(paused);
+            if (gameTime % TIMEOUT_DEBUG_INTERVAL_TICKS == 0L) {
+                CrossroadDimension.LOGGER.info("Portal {} realm timeout paused; destination chunk unloaded", portal.portalId());
+            }
+            return;
+        }
+        logTimeoutStatus(portal, "realm", portal.realmExpirationGameTime().getAsLong(), gameTime);
+        if (gameTime >= portal.realmExpirationGameTime().getAsLong() && !CLOSING_EFFECT_STARTS.containsKey(portal.portalId())) {
+            removeGateLabel(server.getLevel(portal.destinationDimension()), portal.destination(), portal);
+            spawnColumnParticles(server, portal.destination(), ParticleTypes.WITCH, 18);
+            triggerCrystalReformToIdle(server, portal);
+            CLOSING_EFFECT_STARTS.put(portal.portalId(), gameTime);
+            clearTimeoutDebug(portal.portalId(), "realm");
+            CrossroadDimension.LOGGER.info("Portal {} realm timeout expired: portal visual removed; crystal reform triggered", portal.portalId());
         }
     }
 
@@ -427,44 +558,15 @@ public class RealmPortalManager {
             if (portal.isEmpty()) {
                 return true;
             }
-            if (portal.get().state() != RealmPortalState.CLOSING) {
-                CrossroadDimension.LOGGER.info(
-                        "Stopping closing effect for portal {}; state is now {}",
-                        portal.get().portalId(),
-                        portal.get().state()
-                );
+            if (portal.get().realmState() != RealmPortalState.CLOSING) {
                 return true;
             }
-
-            long age = gameTime - entry.getValue();
-            if (age == PORTAL_FADE_PARTICLE_TICKS) {
-                spawnGateParticles(server, portal.get(), ParticleTypes.SMOKE, 10);
-                CrossroadDimension.LOGGER.info("Portal {} closing visual: portal effect fading", portal.get().portalId());
-            }
-            if (age >= CLOSING_REMOVE_TICKS) {
-                RealmPortalData closed = portal.get().closed();
-                savedData(server).put(closed);
-                CrossroadDimension.LOGGER.info(
-                        "Portal {} state transition {} -> CLOSED after sealed crystal reform",
-                        portal.get().portalId(),
-                        portal.get().state()
-                );
-                return true;
+            if (gameTime - entry.getValue() == 10L) {
+                spawnColumnParticles(server, portal.get().destination(), ParticleTypes.SMOKE, 10);
+                CrossroadDimension.LOGGER.info("Portal {} realm closing visual: portal effect fading", portal.get().portalId());
             }
             return false;
         });
-    }
-
-    private static double horizontalDistance(BlockPos first, BlockPos second) {
-        long x = (long) first.getX() - second.getX();
-        long z = (long) first.getZ() - second.getZ();
-        return Math.sqrt((double) x * x + (double) z * z);
-    }
-
-    private void triggerCrystalSlam(MinecraftServer server, RealmPortalData portal) {
-        triggerCrystalSlam(server, portal.origin());
-        triggerCrystalSlam(server, portal.destination());
-        CrossroadDimension.LOGGER.info("Portal {} crystal animation triggered: slam", portal.portalId());
     }
 
     private void triggerCrystalSlam(MinecraftServer server, GlobalPos pos) {
@@ -512,12 +614,47 @@ public class RealmPortalManager {
         }
     }
 
-    private void spawnGateParticles(MinecraftServer server, RealmPortalData portal, net.minecraft.core.particles.ParticleOptions particle, int count) {
-        spawnColumnParticles(server, portal.origin(), particle, count);
-        spawnColumnParticles(server, portal.destination(), particle, count);
+    private void placeGateColumn(MinecraftServer server, GlobalPos pos) {
+        ServerLevel level = server.getLevel(pos.dimension());
+        if (level != null) {
+            if (!level.getBlockState(pos.pos()).is(CrossroadDimension.CROSSROADS_GATE.get())) {
+                level.setBlockAndUpdate(pos.pos(), CrossroadDimension.CROSSROADS_GATE.get().defaultBlockState().setValue(CrossroadsGateBlock.ANCHOR, true));
+            }
+            if (!level.getBlockState(pos.pos().above()).is(CrossroadDimension.CROSSROADS_GATE.get())) {
+                level.setBlockAndUpdate(pos.pos().above(), CrossroadDimension.CROSSROADS_GATE.get().defaultBlockState().setValue(CrossroadsGateBlock.ANCHOR, false));
+            }
+        }
     }
 
-    private void spawnColumnParticles(MinecraftServer server, GlobalPos pos, net.minecraft.core.particles.ParticleOptions particle, int count) {
+    private int removeGateColumn(MinecraftServer server, GlobalPos pos) {
+        int removed = 0;
+        ServerLevel level = server.getLevel(pos.dimension());
+        if (level != null) {
+            if (level.getBlockState(pos.pos()).is(CrossroadDimension.CROSSROADS_GATE.get())) {
+                level.setBlockAndUpdate(pos.pos(), Blocks.AIR.defaultBlockState());
+                removed++;
+                CrossroadDimension.LOGGER.info("Removed gate block at {} {}", pos.dimension().identifier(), pos.pos());
+            }
+            if (level.getBlockState(pos.pos().above()).is(CrossroadDimension.CROSSROADS_GATE.get())) {
+                level.setBlockAndUpdate(pos.pos().above(), Blocks.AIR.defaultBlockState());
+                removed++;
+                CrossroadDimension.LOGGER.info("Removed gate block at {} {}", pos.dimension().identifier(), pos.pos().above());
+            }
+        }
+        return removed;
+    }
+
+    private boolean hasGateColumn(MinecraftServer server, GlobalPos pos) {
+        ServerLevel level = server.getLevel(pos.dimension());
+        return level != null && level.getBlockState(pos.pos()).is(CrossroadDimension.CROSSROADS_GATE.get());
+    }
+
+    private boolean isChunkLoaded(MinecraftServer server, GlobalPos pos) {
+        ServerLevel level = server.getLevel(pos.dimension());
+        return level != null && level.hasChunkAt(pos.pos());
+    }
+
+    private void spawnColumnParticles(MinecraftServer server, GlobalPos pos, ParticleOptions particle, int count) {
         ServerLevel level = server.getLevel(pos.dimension());
         if (level != null) {
             level.sendParticles(particle, pos.pos().getX() + 0.5D, pos.pos().getY() + 1.0D, pos.pos().getZ() + 0.5D, count, 0.25D, 0.75D, 0.25D, 0.02D);
@@ -529,7 +666,6 @@ public class RealmPortalManager {
         if (level == null) {
             return;
         }
-
         removeGateLabel(level, pos, portal);
         ArmorStand label = new ArmorStand(level, pos.pos().getX() + 0.5D, pos.pos().getY() + 1.25D, pos.pos().getZ() + 0.5D);
         label.setInvisible(true);
@@ -541,29 +677,117 @@ public class RealmPortalManager {
         level.addFreshEntity(label);
     }
 
-    private void removeGateLabels(MinecraftServer server, RealmPortalData portal) {
-        removeGateLabel(server.getLevel(portal.originDimension()), portal.origin(), portal);
-        removeGateLabel(server.getLevel(portal.destinationDimension()), portal.destination(), portal);
+    private int removeGateLabels(MinecraftServer server, RealmPortalData portal) {
+        return removeGateLabel(server.getLevel(portal.originDimension()), portal.origin(), portal)
+                + removeGateLabel(server.getLevel(portal.destinationDimension()), portal.destination(), portal);
     }
 
-    private void removeGateLabel(ServerLevel level, GlobalPos pos, RealmPortalData portal) {
+    private int removeGateLabel(ServerLevel level, GlobalPos pos, RealmPortalData portal) {
         if (level == null) {
-            return;
+            return 0;
         }
 
+        int removed = 0;
         AABB bounds = new AABB(pos.pos()).inflate(2.0D, 4.0D, 2.0D);
         for (ArmorStand label : level.getEntitiesOfClass(ArmorStand.class, bounds, entity -> entity.entityTags().contains(labelTag(portal)))) {
             label.discard();
+            removed++;
+        }
+        return removed;
+    }
+
+    private int removeAllGateLabels(MinecraftServer server) {
+        int removed = 0;
+        for (ServerLevel level : server.getAllLevels()) {
+            for (net.minecraft.world.entity.Entity entity : level.getAllEntities()) {
+                if (entity instanceof ArmorStand label && hasCrossroadsLabelTag(label)) {
+                    label.discard();
+                    removed++;
+                }
+            }
+        }
+        if (removed > 0) {
+            CrossroadDimension.LOGGER.info("Removed {} orphaned Crossroads portal label(s)", removed);
+        }
+        return removed;
+    }
+
+    private void logTimeoutStatus(RealmPortalData portal, String side, long expiration, long gameTime) {
+        long remaining = Math.max(0L, expiration - gameTime);
+        long bucket = remaining / TIMEOUT_DEBUG_INTERVAL_TICKS;
+        String key = timeoutKey(portal.portalId(), side);
+        Long previousBucket = TIMEOUT_DEBUG_LOGS.put(key, bucket);
+        if (previousBucket == null || previousBucket.longValue() != bucket) {
+            CrossroadDimension.LOGGER.info(
+                    "Portal {} {} timeout status: now={} expires={} remainingTicks={} population={} outsideState={} realmState={}",
+                    portal.portalId(),
+                    side,
+                    gameTime,
+                    expiration,
+                    remaining,
+                    portal.realmPopulation(),
+                    portal.outsideState(),
+                    portal.realmState()
+            );
         }
     }
 
+    private void clearTimeoutDebug(UUID portalId) {
+        clearTimeoutDebug(portalId, "outside");
+        clearTimeoutDebug(portalId, "realm");
+    }
+
+    private void clearTimeoutDebug(UUID portalId, String side) {
+        TIMEOUT_DEBUG_LOGS.remove(timeoutKey(portalId, side));
+    }
+
+    private static String timeoutKey(UUID portalId, String side) {
+        return portalId + ":" + side;
+    }
+
     private static String labelTag(RealmPortalData portal) {
-        return CrossroadDimension.MODID + ".portal_label." + portal.portalId();
+        return LABEL_TAG_PREFIX + portal.portalId();
+    }
+
+    private static boolean hasCrossroadsLabelTag(ArmorStand entity) {
+        for (String tag : entity.entityTags()) {
+            if (tag.startsWith(LABEL_TAG_PREFIX)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static double horizontalDistance(BlockPos first, BlockPos second) {
+        long x = (long) first.getX() - second.getX();
+        long z = (long) first.getZ() - second.getZ();
+        return Math.sqrt((double) x * x + (double) z * z);
+    }
+
+    private static boolean sameColumn(GlobalPos first, GlobalPos second) {
+        return first.dimension().equals(second.dimension())
+                && first.pos().getX() == second.pos().getX()
+                && first.pos().getZ() == second.pos().getZ()
+                && (first.pos().getY() == second.pos().getY() || first.pos().getY() + 1 == second.pos().getY());
     }
 
     private enum CrystalAnimation {
         OPENING,
         SLAM,
         REFORM_TO_IDLE
+    }
+
+    public record PortalDebugInfo(
+            int savedPortals,
+            long openingPortals,
+            long openPortals,
+            long closingPortals,
+            long closedPortals,
+            long sealedCrystals,
+            int scheduledClosingEffects
+    ) {
+    }
+
+    public record PortalCleanupSummary(int savedPortalsCleared, int gateBlocksRemoved, int labelsRemoved, int timersCleared) {
     }
 }

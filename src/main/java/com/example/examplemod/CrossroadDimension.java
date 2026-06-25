@@ -5,6 +5,7 @@ import org.slf4j.Logger;
 import com.example.examplemod.client.render.ClientRenderRegistration;
 import com.example.examplemod.network.TravelNetwork;
 import com.example.examplemod.portal.CrossroadCrystalBlockEntity;
+import com.example.examplemod.portal.CrossroadsCommands;
 import com.example.examplemod.portal.CrossroadsGateBlock;
 import com.example.examplemod.portal.RealmPortalManager;
 import com.example.examplemod.portal.RealmPortalRuntime;
@@ -33,6 +34,7 @@ import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
+import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.server.ServerStartingEvent;
@@ -147,6 +149,11 @@ public class CrossroadDimension {
     public void onServerStarted(ServerStartedEvent event) {
         new PocketRealmManager().initialize(event.getServer());
         new RealmPortalManager().initialize(event.getServer());
+    }
+
+    @SubscribeEvent
+    public void onRegisterCommands(RegisterCommandsEvent event) {
+        CrossroadsCommands.register(event);
     }
 
     @SubscribeEvent

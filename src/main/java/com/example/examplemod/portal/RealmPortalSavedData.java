@@ -40,14 +40,21 @@ public class RealmPortalSavedData extends SavedData {
     public Optional<RealmPortalData> findActiveForOwner(UUID owner) {
         return portals.values().stream()
                 .filter(portal -> portal.owner().equals(owner))
-                .filter(portal -> portal.state() != RealmPortalState.CLOSED)
+                .filter(portal -> portal.outsideState() != RealmPortalState.CLOSED || portal.realmState() != RealmPortalState.SEALED)
                 .findFirst();
     }
 
     public Optional<RealmPortalData> findAt(GlobalPos position) {
         return portals.values().stream()
-                .filter(portal -> portal.state() != RealmPortalState.CLOSED)
-                .filter(portal -> sameColumn(portal.origin(), position) || sameColumn(portal.destination(), position))
+                .filter(portal -> {
+                    if (sameColumn(portal.origin(), position)) {
+                        return portal.outsideState() != RealmPortalState.CLOSED;
+                    }
+                    if (sameColumn(portal.destination(), position)) {
+                        return portal.realmState() != RealmPortalState.SEALED;
+                    }
+                    return false;
+                })
                 .findFirst();
     }
 
@@ -57,6 +64,11 @@ public class RealmPortalSavedData extends SavedData {
 
     public void put(RealmPortalData portal) {
         portals.put(portal.portalId(), portal);
+        setDirty();
+    }
+
+    public void clear() {
+        portals.clear();
         setDirty();
     }
 

@@ -29,8 +29,7 @@ public class RealmPortalRuntime {
 
         GlobalPos gatePos = GlobalPos.of(player.level().dimension(), baseGatePos(player, pos));
         PORTAL_MANAGER.getPortalAt(player.level().getServer(), gatePos)
-                .filter(portal -> portal.state() == RealmPortalState.OPEN || portal.state() == RealmPortalState.CLOSING)
-                .filter(portal -> PORTAL_MANAGER.isPortalReadyForTravel(player.level().getServer(), portal))
+                .filter(portal -> PORTAL_MANAGER.isPortalReadyForTravel(portal, sameColumn(portal.origin(), gatePos)))
                 .ifPresent(portal -> startOrContinueChannel(player, portal, gatePos));
     }
 
@@ -53,11 +52,22 @@ public class RealmPortalRuntime {
         }
     }
 
+    public static RuntimeDebugInfo debugInfo() {
+        return new RuntimeDebugInfo(CHANNELS.size(), COOLDOWNS.size());
+    }
+
+    public static RuntimeDebugInfo clearRuntimeState() {
+        RuntimeDebugInfo previous = debugInfo();
+        CHANNELS.clear();
+        COOLDOWNS.clear();
+        return previous;
+    }
+
     private static void startOrContinueChannel(ServerPlayer player, RealmPortalData portal, GlobalPos gatePos) {
         boolean fromOrigin = sameColumn(portal.origin(), gatePos);
         ChannelState current = CHANNELS.get(player.getUUID());
         if (current == null || !current.portalId().equals(portal.portalId()) || current.fromOrigin() != fromOrigin) {
-            PORTAL_MANAGER.touchPortalUse(player.level().getServer(), portal.portalId());
+            PORTAL_MANAGER.touchPortalUse(player.level().getServer(), portal.portalId(), fromOrigin);
             CHANNELS.put(player.getUUID(), new ChannelState(portal.portalId(), fromOrigin, 0));
             CrossroadDimension.LOGGER.info("Started gate channel for {} through portal {}", player.getGameProfile().name(), portal.portalId());
             player.sendSystemMessage(Component.literal("Crossroads gate channeling. Stay inside the tear to travel."));
@@ -71,7 +81,7 @@ public class RealmPortalRuntime {
         }
 
         RealmPortalData portal = PORTAL_MANAGER.getPortal(player.level().getServer(), state.portalId()).orElse(null);
-        if (portal == null || portal.state() == RealmPortalState.CLOSED || !playerStillInsideExpectedGate(player, portal, state.fromOrigin())) {
+        if (portal == null || !PORTAL_MANAGER.isPortalReadyForTravel(portal, state.fromOrigin()) || !playerStillInsideExpectedGate(player, portal, state.fromOrigin())) {
             CHANNELS.remove(player.getUUID());
             player.sendSystemMessage(Component.literal("Crossroads travel cancelled."));
             return;
@@ -156,5 +166,8 @@ public class RealmPortalRuntime {
     }
 
     private record ChannelState(UUID portalId, boolean fromOrigin, int ticksInside) {
+    }
+
+    public record RuntimeDebugInfo(int activeChannels, int teleportCooldowns) {
     }
 }
