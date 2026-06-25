@@ -26,6 +26,17 @@ sourceSets.main.resources {
     exclude("src/generated/**/.cache") // datagen cache files
 }
 
+tasks.named('processResources', ProcessResources).configure {
+    from("src/main/resources/assets/${mod_id}/geo") {
+        include("*.geo.json")
+        into("assets/${mod_id}/geckolib/models")
+    }
+    from("src/main/resources/assets/${mod_id}/animations") {
+        include("*.animation.json")
+        into("assets/${mod_id}/geckolib/animations")
+    }
+}
+
 repositories {
     // Add here additional repositories if required by some of the dependencies below.
     maven {
@@ -120,6 +131,7 @@ configurations {
 
 dependencies {
     implementation "curse.maven:infiniverse-568341:${infiniverse_file_id}"
+    implementation "curse.maven:geckolib-388172:${geckolib_file_id}"
 
     // Example optional mod dependency with JEI
     // The JEI API is declared for compile time use, while the full JEI artifact is used at runtime

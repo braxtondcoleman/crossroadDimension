@@ -5,17 +5,21 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.InsideBlockEffectApplier;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.EntityBlock;
+import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
-import net.minecraft.world.level.block.state.properties.IntegerProperty;
+import net.minecraft.world.level.block.state.properties.BooleanProperty;
+import org.jspecify.annotations.Nullable;
 
-public class CrossroadsGateBlock extends Block {
-    public static final IntegerProperty STAGE = IntegerProperty.create("stage", 0, 2);
+public class CrossroadsGateBlock extends Block implements EntityBlock {
+    public static final BooleanProperty ANCHOR = BooleanProperty.create("anchor");
 
     public CrossroadsGateBlock(Properties properties) {
         super(properties);
-        registerDefaultState(stateDefinition.any().setValue(STAGE, 0));
+        registerDefaultState(stateDefinition.any().setValue(ANCHOR, true));
     }
 
     @Override
@@ -27,6 +31,23 @@ public class CrossroadsGateBlock extends Block {
 
     @Override
     protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
-        builder.add(STAGE);
+        builder.add(ANCHOR);
+    }
+
+    @Override
+    protected RenderShape getRenderShape(BlockState state) {
+        return RenderShape.INVISIBLE;
+    }
+
+    @Override
+    protected boolean triggerEvent(BlockState state, Level level, BlockPos pos, int eventId, int eventData) {
+        super.triggerEvent(state, level, pos, eventId, eventData);
+        BlockEntity blockEntity = level.getBlockEntity(pos);
+        return blockEntity != null && blockEntity.triggerEvent(eventId, eventData);
+    }
+
+    @Override
+    public @Nullable BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
+        return state.getValue(ANCHOR) ? new CrossroadCrystalBlockEntity(pos, state) : null;
     }
 }

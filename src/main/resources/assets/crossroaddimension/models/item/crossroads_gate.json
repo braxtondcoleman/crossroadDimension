@@ -1,3 +1,6 @@
 {
-  "parent": "crossroaddimension:block/crossroads_gate_stage2"
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "crossroaddimension:block/crossroad_crystal"
+  }
 }

@@ -8,10 +8,14 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.neoforge.client.gui.ConfigurationScreen;
+import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
 import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 
+import net.minecraft.resources.Identifier;
+import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 import com.example.examplemod.client.KeybindHandler;
+import com.example.examplemod.client.PlacementMode;
 
 // This class will not load on dedicated servers. Accessing client side code from here is safe.
 @Mod(value = CrossroadDimension.MODID, dist = Dist.CLIENT)
@@ -35,5 +39,14 @@ public class CrossroadDimensionClient {
     @SubscribeEvent
     public static void registerKeys(RegisterKeyMappingsEvent event) {
         event.register(KeybindHandler.OPEN_CROSSROADS);
+    }
+
+    @SubscribeEvent
+    public static void registerGuiLayers(RegisterGuiLayersEvent event) {
+        event.registerAbove(
+                VanillaGuiLayers.CROSSHAIR,
+                Identifier.fromNamespaceAndPath(CrossroadDimension.MODID, "placement_mode"),
+                (graphics, deltaTracker) -> PlacementMode.render(graphics)
+        );
     }
 }

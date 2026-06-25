@@ -2,7 +2,9 @@ package com.example.examplemod;
 
 import org.slf4j.Logger;
 
+import com.example.examplemod.client.render.ClientRenderRegistration;
 import com.example.examplemod.network.TravelNetwork;
+import com.example.examplemod.portal.CrossroadCrystalBlockEntity;
 import com.example.examplemod.portal.CrossroadsGateBlock;
 import com.example.examplemod.portal.RealmPortalManager;
 import com.example.examplemod.portal.RealmPortalRuntime;
@@ -19,10 +21,12 @@ import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.material.MapColor;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
 import net.neoforged.fml.ModContainer;
@@ -50,6 +54,7 @@ public class CrossroadDimension {
     public static final DeferredRegister.Blocks BLOCKS = DeferredRegister.createBlocks(MODID);
     // Create a Deferred Register to hold Items which will all be registered under the "CrossroadDimension" namespace
     public static final DeferredRegister.Items ITEMS = DeferredRegister.createItems(MODID);
+    public static final DeferredRegister<BlockEntityType<?>> BLOCK_ENTITY_TYPES = DeferredRegister.create(Registries.BLOCK_ENTITY_TYPE, MODID);
     // Create a Deferred Register to hold CreativeModeTabs which will all be registered under the "CrossroadDimension" namespace
     public static final DeferredRegister<CreativeModeTab> CREATIVE_MODE_TABS = DeferredRegister.create(Registries.CREATIVE_MODE_TAB, MODID);
 
@@ -63,6 +68,8 @@ public class CrossroadDimension {
             properties -> properties.mapColor(MapColor.COLOR_PURPLE).noCollision().lightLevel(state -> 10).strength(-1.0F, 3600000.0F)
     );
     public static final DeferredItem<BlockItem> CROSSROADS_GATE_ITEM = ITEMS.registerSimpleBlockItem("crossroads_gate", CROSSROADS_GATE);
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<CrossroadCrystalBlockEntity>> CROSSROADS_GATE_BLOCK_ENTITY =
+            BLOCK_ENTITY_TYPES.register("crossroads_gate", () -> new BlockEntityType<>(CrossroadCrystalBlockEntity::new, CROSSROADS_GATE.get()));
 
     // Creates a new food item with the id "CrossroadDimension:example_id", nutrition 1 and saturation 2
     public static final DeferredItem<Item> EXAMPLE_ITEM = ITEMS.registerSimpleItem("example_item", p -> p.food(new FoodProperties.Builder()
@@ -88,6 +95,7 @@ public class CrossroadDimension {
         BLOCKS.register(modEventBus);
         // Register the Deferred Register to the mod event bus so items get registered
         ITEMS.register(modEventBus);
+        BLOCK_ENTITY_TYPES.register(modEventBus);
         // Register the Deferred Register to the mod event bus so tabs get registered
         CREATIVE_MODE_TABS.register(modEventBus);
 
@@ -101,6 +109,10 @@ public class CrossroadDimension {
 
         // Register our mod's ModConfigSpec so that FML can create and load the config file for us
         modContainer.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
+
+        if (FMLEnvironment.getDist() == Dist.CLIENT) {
+            modEventBus.addListener(ClientRenderRegistration::registerRenderers);
+        }
     }
 
     private void commonSetup(FMLCommonSetupEvent event) {

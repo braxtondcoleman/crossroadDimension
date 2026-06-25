@@ -12,74 +12,48 @@
 			},
 			"bones": [
 				{
-					"name": "Crystal",
-					"pivot": [0, 0, 0]
-				},
-				{
 					"name": "Center",
-					"parent": "Crystal",
-					"pivot": [-1, 3, 0],
+					"pivot": [0, 7.5, 0],
 					"cubes": [
-						{"origin": [-2, 4, -2], "size": [4, 1, 4], "uv": [0, 0]}
+						{"origin": [4, 7, -5], "size": [1, 1, 10], "uv": [0, -6]},
+						{"origin": [4, 7, -4], "size": [1, 1, 8], "pivot": [0, 8, 0], "rotation": [0, -90, 0], "uv": [2, -4]},
+						{"origin": [4, 7, -4], "size": [1, 1, 8], "pivot": [0, 8, 0], "rotation": [0, 90, 0], "uv": [2, -4]},
+						{"origin": [4, 7, -5], "size": [1, 1, 10], "pivot": [0, 8, 0], "rotation": [-180, 0, 180], "uv": [0, -6]}
 					]
 				},
 				{
-					"name": "PointBottom",
-					"parent": "Crystal",
-					"pivot": [-1, 3, 0],
-					"rotation": [180, 0, 0]
-				},
-				{
-					"name": "Bottom",
-					"parent": "PointBottom",
-					"pivot": [-1, 3, 0],
+					"name": "Crystal M",
+					"pivot": [0, 0, 0],
 					"cubes": [
-						{"origin": [-0.5, 5, -0.5], "size": [1, 1, 1], "uv": [12, 13]}
-					]
-				},
-				{
-					"name": "Middle",
-					"parent": "PointBottom",
-					"pivot": [-1, 3, 0],
-					"cubes": [
+						{"origin": [-0.5, 11, -0.5], "size": [1, 1, 1], "uv": [12, 11]},
+						{"origin": [-0.5, 3, -0.5], "size": [1, 1, 1], "uv": [12, 13]},
+						{"origin": [-1.5, 5, -1.5], "size": [3, 5, 3], "uv": [0, 5]},
+						{"origin": [-1, 10, -1], "size": [2, 1, 2], "uv": [12, 5]},
 						{"origin": [-1, 4, -1], "size": [2, 1, 2], "uv": [12, 8]}
 					]
 				},
 				{
 					"name": "Top",
-					"parent": "PointBottom",
-					"pivot": [-1, 3, 0],
+					"parent": "Crystal M",
+					"pivot": [3, 12.5, -3],
 					"cubes": [
-						{"origin": [-1.5, 2, -1.5], "size": [3, 2, 3], "uv": [0, 10]}
+						{"origin": [2.5, 12, -3.5], "size": [1, 1, 1], "uv": [12, 11]}
 					]
 				},
 				{
-					"name": "Point",
-					"parent": "Crystal",
-					"pivot": [-1, 6, 0]
-				},
-				{
-					"name": "Tip",
-					"parent": "Point",
-					"pivot": [-1, 8, 0],
+					"name": "Bottom",
+					"parent": "Crystal M",
+					"pivot": [0, 0, 0],
 					"cubes": [
-						{"origin": [-0.5, 8, -0.5], "size": [1, 1, 1], "uv": [12, 11]}
+						{"origin": [1.5, 2, 2.5], "size": [1, 1, 1], "uv": [12, 11]}
 					]
 				},
 				{
-					"name": "Mid",
-					"parent": "Point",
-					"pivot": [-1, 8, 0],
+					"name": "Middle",
+					"parent": "Crystal M",
+					"pivot": [0, 0, 0],
 					"cubes": [
-						{"origin": [-1, 7, -1], "size": [2, 1, 2], "uv": [12, 5]}
-					]
-				},
-				{
-					"name": "Bot",
-					"parent": "Point",
-					"pivot": [-1, 6, 0],
-					"cubes": [
-						{"origin": [-1.5, 5, -1.5], "size": [3, 2, 3], "uv": [0, 5]}
+						{"origin": [-3.5, 8, 2.5], "size": [1, 1, 1], "uv": [12, 11]}
 					]
 				}
 			]

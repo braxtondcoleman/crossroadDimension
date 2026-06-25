@@ -30,6 +30,7 @@ public class RealmPortalRuntime {
         GlobalPos gatePos = GlobalPos.of(player.level().dimension(), baseGatePos(player, pos));
         PORTAL_MANAGER.getPortalAt(player.level().getServer(), gatePos)
                 .filter(portal -> portal.state() == RealmPortalState.OPEN || portal.state() == RealmPortalState.CLOSING)
+                .filter(portal -> PORTAL_MANAGER.isPortalReadyForTravel(player.level().getServer(), portal))
                 .ifPresent(portal -> startOrContinueChannel(player, portal, gatePos));
     }
 
@@ -56,6 +57,7 @@ public class RealmPortalRuntime {
         boolean fromOrigin = sameColumn(portal.origin(), gatePos);
         ChannelState current = CHANNELS.get(player.getUUID());
         if (current == null || !current.portalId().equals(portal.portalId()) || current.fromOrigin() != fromOrigin) {
+            PORTAL_MANAGER.touchPortalUse(player.level().getServer(), portal.portalId());
             CHANNELS.put(player.getUUID(), new ChannelState(portal.portalId(), fromOrigin, 0));
             CrossroadDimension.LOGGER.info("Started gate channel for {} through portal {}", player.getGameProfile().name(), portal.portalId());
             player.sendSystemMessage(Component.literal("Crossroads gate channeling. Stay inside the tear to travel."));

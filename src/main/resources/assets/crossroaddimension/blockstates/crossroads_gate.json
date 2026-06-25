@@ -1,13 +1,10 @@
 {
   "variants": {
-    "stage=0": {
-      "model": "crossroaddimension:block/crossroads_gate_stage0"
+    "anchor=true": {
+      "model": "crossroaddimension:block/crossroads_gate_invisible"
     },
-    "stage=1": {
-      "model": "crossroaddimension:block/crossroads_gate_stage1"
-    },
-    "stage=2": {
-      "model": "crossroaddimension:block/crossroads_gate_stage2"
+    "anchor=false": {
+      "model": "crossroaddimension:block/crossroads_gate_invisible"
     }
   }
 }
