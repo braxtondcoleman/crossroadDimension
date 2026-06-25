@@ -227,6 +227,43 @@ public class RealmPortalManager {
         return new PortalCleanupSummary(portals, gateBlocks, labels, timers);
     }
 
+    public void syncPortalVisualForAnchor(MinecraftServer server, GlobalPos anchorPos, CrossroadCrystalBlockEntity crystal) {
+        Optional<RealmPortalData> linkedPortal = savedData(server).all().stream()
+                .filter(portal -> sameColumn(portal.origin(), anchorPos) || sameColumn(portal.destination(), anchorPos))
+                .findFirst();
+
+        if (linkedPortal.isEmpty()) {
+            if (crystal.isPortalVisualVisible()) {
+                crystal.hidePortalVisual();
+            }
+            return;
+        }
+
+        RealmPortalData portal = linkedPortal.get();
+        boolean visualShouldBeOpen = hasActivePortalVisual(portal);
+        if (visualShouldBeOpen && (crystal.isPortalVisualHidden() || crystal.isPortalVisualClosing())) {
+            CrossroadDimension.LOGGER.info(
+                    "Portal {} visual sync restored OPENING at {} {}; outsideState={} realmState={}",
+                    portal.portalId(),
+                    anchorPos.dimension().identifier(),
+                    anchorPos.pos(),
+                    portal.outsideState(),
+                    portal.realmState()
+            );
+            crystal.openPortalVisual();
+        } else if (!visualShouldBeOpen && crystal.isPortalVisualVisible()) {
+            CrossroadDimension.LOGGER.info(
+                    "Portal {} visual sync restored HIDDEN at {} {}; outsideState={} realmState={}",
+                    portal.portalId(),
+                    anchorPos.dimension().identifier(),
+                    anchorPos.pos(),
+                    portal.outsideState(),
+                    portal.realmState()
+            );
+            crystal.hidePortalVisual();
+        }
+    }
+
     public void completeGateTravel(ServerPlayer player, RealmPortalData portal, boolean fromOrigin) {
         MinecraftServer server = player.level().getServer();
         RealmPortalData current = getPortal(server, portal.portalId()).orElse(portal);
@@ -454,6 +491,7 @@ public class RealmPortalManager {
 
         RealmPortalData opened = portal.outsideOpen();
         savedData(server).put(opened);
+        openPortalVisuals(server, opened);
         spawnColumnParticles(server, opened.origin(), ParticleTypes.REVERSE_PORTAL, 28);
         CrossroadDimension.LOGGER.info(
                 "Portal {} outside slam completion trigger: OPENING -> OPEN; portal effects started",
@@ -471,6 +509,7 @@ public class RealmPortalManager {
         savedData(server).put(opened);
         CLOSING_EFFECT_STARTS.remove(portal.portalId());
         clearTimeoutDebug(portal.portalId());
+        openPortalVisuals(server, opened);
         spawnColumnParticles(server, opened.destination(), ParticleTypes.REVERSE_PORTAL, 28);
         CrossroadDimension.LOGGER.info(
                 "Portal {} realm slam completion trigger: {} -> OPEN; portal effects started",
@@ -520,6 +559,7 @@ public class RealmPortalManager {
         }
         logTimeoutStatus(portal, "outside", portal.outsideExpirationGameTime().getAsLong(), gameTime);
         if (gameTime >= portal.outsideExpirationGameTime().getAsLong()) {
+            closePortalVisuals(server, portal);
             removeGateColumn(server, portal.origin());
             removeGateLabel(server.getLevel(portal.originDimension()), portal.origin(), portal);
             RealmPortalData closed = portal.outsideClosed();
@@ -543,6 +583,7 @@ public class RealmPortalManager {
         }
         logTimeoutStatus(portal, "realm", portal.realmExpirationGameTime().getAsLong(), gameTime);
         if (gameTime >= portal.realmExpirationGameTime().getAsLong() && !CLOSING_EFFECT_STARTS.containsKey(portal.portalId())) {
+            closePortalVisuals(server, portal);
             removeGateLabel(server.getLevel(portal.destinationDimension()), portal.destination(), portal);
             spawnColumnParticles(server, portal.destination(), ParticleTypes.WITCH, 18);
             triggerCrystalReformToIdle(server, portal);
@@ -612,6 +653,36 @@ public class RealmPortalManager {
                     animation
             );
         }
+    }
+
+    private void openPortalVisuals(MinecraftServer server, RealmPortalData portal) {
+        placeGateColumn(server, portal.origin());
+        placeGateColumn(server, portal.destination());
+        triggerPortalVisual(server, portal.origin(), PortalVisual.OPEN);
+        triggerPortalVisual(server, portal.destination(), PortalVisual.OPEN);
+    }
+
+    private void closePortalVisuals(MinecraftServer server, RealmPortalData portal) {
+        triggerPortalVisual(server, portal.origin(), PortalVisual.CLOSE);
+        triggerPortalVisual(server, portal.destination(), PortalVisual.CLOSE);
+    }
+
+    private void triggerPortalVisual(MinecraftServer server, GlobalPos pos, PortalVisual visual) {
+        ServerLevel level = server.getLevel(pos.dimension());
+        if (level != null && level.getBlockEntity(pos.pos()) instanceof CrossroadCrystalBlockEntity crystal) {
+            switch (visual) {
+                case OPEN -> crystal.openPortalVisual();
+                case CLOSE -> crystal.closePortalVisual();
+            }
+        }
+    }
+
+    private static boolean hasActivePortalVisual(RealmPortalData portal) {
+        return isVisualOpenState(portal.outsideState()) || isVisualOpenState(portal.realmState());
+    }
+
+    private static boolean isVisualOpenState(RealmPortalState state) {
+        return state == RealmPortalState.OPENING || state == RealmPortalState.OPEN || state == RealmPortalState.CLOSING;
     }
 
     private void placeGateColumn(MinecraftServer server, GlobalPos pos) {
@@ -775,6 +846,11 @@ public class RealmPortalManager {
         OPENING,
         SLAM,
         REFORM_TO_IDLE
+    }
+
+    private enum PortalVisual {
+        OPEN,
+        CLOSE
     }
 
     public record PortalDebugInfo(

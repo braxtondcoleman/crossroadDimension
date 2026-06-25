@@ -23,6 +23,7 @@ import net.minecraft.world.level.block.state.BlockState;
 
 public class CrossroadCrystalBlockEntity extends BlockEntity implements GeoBlockEntity {
     public static final int VISUAL_MODE_EVENT = 1;
+    public static final int PORTAL_VISUAL_EVENT = 2;
     public static final String CONTROLLER = "crystal";
 
     private static final RawAnimation IDLE = RawAnimation.begin().thenLoop("idle");
@@ -31,15 +32,23 @@ public class CrossroadCrystalBlockEntity extends BlockEntity implements GeoBlock
     private static final int IDLE_OPENING_LOOPS = 1;
     private static final int HOLD_AFTER_SLAM_TICKS = 6;
     private static final int FADE_OUT_TICKS = 14;
+    private static final int PORTAL_SCALE_TICKS = 8;
+    private static final float PORTAL_SPIN_DEGREES_PER_TICK = 0.01875F;
+    private static final float PORTAL_SCROLL_PER_TICK = 0.0002F;
+    private static final float PORTAL_SWIRL_RADIANS_PER_TICK = (float) (Math.PI * 2.0D / 500.0D);
+    private static final long PORTAL_VISUAL_SYNC_INTERVAL_TICKS = 20L;
     private static final AnimationTimings ANIMATION_TIMINGS = AnimationTimings.load();
     private static final RealmPortalManager PORTAL_MANAGER = new RealmPortalManager();
 
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
     private long visualStartGameTime = Long.MIN_VALUE;
     private long phaseStartGameTime = Long.MIN_VALUE;
+    private long portalVisualStartGameTime = Long.MIN_VALUE;
     private String currentAnimation = "none";
     private VisualMode visualMode = VisualMode.HIDDEN;
+    private PortalVisualMode portalVisualMode = PortalVisualMode.HIDDEN;
     private SequencePhase sequencePhase = SequencePhase.NONE;
+    private long lastPortalVisualSyncGameTime = Long.MIN_VALUE;
     private boolean slamCompletionNotified = false;
     private boolean reformCompletionNotified = false;
 
@@ -65,6 +74,30 @@ public class CrossroadCrystalBlockEntity extends BlockEntity implements GeoBlock
     public void playReformToIdle() {
         setVisualMode(VisualMode.SEALED_REFORM, "reform");
         beginPhase(SequencePhase.REFORMING_TO_IDLE, "reform");
+    }
+
+    public void openPortalVisual() {
+        setPortalVisualMode(PortalVisualMode.OPENING);
+    }
+
+    public void closePortalVisual() {
+        setPortalVisualMode(PortalVisualMode.CLOSING);
+    }
+
+    public void hidePortalVisual() {
+        setPortalVisualMode(PortalVisualMode.HIDDEN);
+    }
+
+    public boolean isPortalVisualHidden() {
+        return portalVisualMode == PortalVisualMode.HIDDEN;
+    }
+
+    public boolean isPortalVisualVisible() {
+        return portalVisualMode != PortalVisualMode.HIDDEN;
+    }
+
+    public boolean isPortalVisualClosing() {
+        return portalVisualMode == PortalVisualMode.CLOSING;
     }
 
     public static void tick(Level level, BlockPos pos, BlockState state, CrossroadCrystalBlockEntity crystal) {
@@ -95,6 +128,40 @@ public class CrossroadCrystalBlockEntity extends BlockEntity implements GeoBlock
         }
 
         return 1.0F - clamp((age - fadeStart) / FADE_OUT_TICKS);
+    }
+
+    public float portalScale(float partialTick) {
+        return switch (portalVisualMode) {
+            case HIDDEN -> 0.0F;
+            case OPENING -> clamp(portalVisualAge(partialTick) / PORTAL_SCALE_TICKS);
+            case OPEN -> 1.0F;
+            case CLOSING -> 1.0F - clamp(portalVisualAge(partialTick) / PORTAL_SCALE_TICKS);
+        };
+    }
+
+    public float portalAlpha(float partialTick) {
+        return portalScale(partialTick);
+    }
+
+    public float portalScroll(float partialTick) {
+        if (level == null) {
+            return 0.0F;
+        }
+        return ((level.getGameTime() + partialTick) * PORTAL_SCROLL_PER_TICK) % 1.0F;
+    }
+
+    public float portalSpin(float partialTick) {
+        if (level == null) {
+            return 0.0F;
+        }
+        return ((level.getGameTime() + partialTick) * PORTAL_SPIN_DEGREES_PER_TICK) % 360.0F;
+    }
+
+    public float portalSwirl(float partialTick) {
+        if (level == null) {
+            return 0.0F;
+        }
+        return ((level.getGameTime() + partialTick) * PORTAL_SWIRL_RADIANS_PER_TICK) % ((float) Math.PI * 2.0F);
     }
 
     private float visualAge(float partialTick) {
@@ -128,6 +195,8 @@ public class CrossroadCrystalBlockEntity extends BlockEntity implements GeoBlock
     }
 
     private void tickSequence(Level level) {
+        syncPortalVisualState(level);
+        tickPortalVisual(level);
         if (sequencePhase == SequencePhase.NONE) {
             return;
         }
@@ -182,6 +251,30 @@ public class CrossroadCrystalBlockEntity extends BlockEntity implements GeoBlock
         return Math.max(0L, level.getGameTime() - phaseStartGameTime);
     }
 
+    private float phaseAge(float partialTick) {
+        if (level == null) {
+            return 0.0F;
+        }
+
+        if (phaseStartGameTime == Long.MIN_VALUE) {
+            phaseStartGameTime = level.getGameTime();
+        }
+
+        return Math.max(0.0F, level.getGameTime() - phaseStartGameTime + partialTick);
+    }
+
+    private float portalVisualAge(float partialTick) {
+        if (level == null) {
+            return 0.0F;
+        }
+
+        if (portalVisualStartGameTime == Long.MIN_VALUE) {
+            portalVisualStartGameTime = level.getGameTime();
+        }
+
+        return Math.max(0.0F, level.getGameTime() - portalVisualStartGameTime + partialTick);
+    }
+
     private long sequenceAge(Level level) {
         if (visualStartGameTime == Long.MIN_VALUE) {
             visualStartGameTime = level.getGameTime();
@@ -200,6 +293,60 @@ public class CrossroadCrystalBlockEntity extends BlockEntity implements GeoBlock
         if (level != null && !level.isClientSide()) {
             level.blockEvent(worldPosition, getBlockState().getBlock(), VISUAL_MODE_EVENT, mode.ordinal());
         }
+    }
+
+    private void setPortalVisualMode(PortalVisualMode mode) {
+        portalVisualMode = mode;
+        portalVisualStartGameTime = level == null ? Long.MIN_VALUE : level.getGameTime();
+        if (level != null && !level.isClientSide()) {
+            level.blockEvent(worldPosition, getBlockState().getBlock(), PORTAL_VISUAL_EVENT, mode.ordinal());
+        }
+    }
+
+    private void tickPortalVisual(Level level) {
+        if (portalVisualMode == PortalVisualMode.OPENING && portalVisualAge(0.0F) >= PORTAL_SCALE_TICKS) {
+            if (level.isClientSide()) {
+                portalVisualMode = PortalVisualMode.OPEN;
+            } else {
+                setPortalVisualMode(PortalVisualMode.OPEN);
+            }
+        } else if (portalVisualMode == PortalVisualMode.CLOSING && portalVisualAge(0.0F) >= PORTAL_SCALE_TICKS) {
+            if (level.isClientSide()) {
+                portalVisualMode = PortalVisualMode.HIDDEN;
+            } else {
+                setPortalVisualMode(PortalVisualMode.HIDDEN);
+            }
+        }
+    }
+
+    private void syncPortalVisualState(Level level) {
+        if (level.isClientSide() || !(level instanceof ServerLevel serverLevel)) {
+            return;
+        }
+
+        if (isTransientCrystalAnimationActive()) {
+            return;
+        }
+
+        long gameTime = level.getGameTime();
+        if (lastPortalVisualSyncGameTime != Long.MIN_VALUE && gameTime - lastPortalVisualSyncGameTime < PORTAL_VISUAL_SYNC_INTERVAL_TICKS) {
+            return;
+        }
+
+        lastPortalVisualSyncGameTime = gameTime;
+        PORTAL_MANAGER.syncPortalVisualForAnchor(serverLevel.getServer(), GlobalPos.of(serverLevel.dimension(), worldPosition), this);
+    }
+
+    private boolean isTransientCrystalAnimationActive() {
+        return switch (sequencePhase) {
+            case OPENING_REFORM, OPENING_IDLE, SLAMMING, REFORMING_TO_IDLE -> true;
+            case SLAM_HELD -> isSlamFadeActive();
+            case NONE, SEALED_IDLE -> false;
+        };
+    }
+
+    private boolean isSlamFadeActive() {
+        return isSlamVisual() && visualAge(0.0F) <= slamFadeStartTicks() + FADE_OUT_TICKS;
     }
 
     private void beginPhase(SequencePhase phase, String animation) {
@@ -233,6 +380,15 @@ public class CrossroadCrystalBlockEntity extends BlockEntity implements GeoBlock
                 };
                 visualStartGameTime = level == null ? Long.MIN_VALUE : level.getGameTime();
                 beginPhase(syncedPhaseFor(visualMode), currentAnimation);
+                return true;
+            }
+        }
+
+        if (eventId == PORTAL_VISUAL_EVENT) {
+            PortalVisualMode[] modes = PortalVisualMode.values();
+            if (eventData >= 0 && eventData < modes.length) {
+                portalVisualMode = modes[eventData];
+                portalVisualStartGameTime = level == null ? Long.MIN_VALUE : level.getGameTime();
                 return true;
             }
         }
@@ -300,6 +456,13 @@ public class CrossroadCrystalBlockEntity extends BlockEntity implements GeoBlock
         SEALED_REFORM,
         SEALED_OPENING,
         SEALED_IDLE
+    }
+
+    private enum PortalVisualMode {
+        HIDDEN,
+        OPENING,
+        OPEN,
+        CLOSING
     }
 
     private enum SequencePhase {
