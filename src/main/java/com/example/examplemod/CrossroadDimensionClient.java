@@ -1,12 +1,10 @@
 package com.example.examplemod;
 
-import net.minecraft.client.Minecraft;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.common.Mod;
-import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.neoforge.client.gui.ConfigurationScreen;
 import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
 import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
@@ -14,6 +12,7 @@ import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 import net.minecraft.resources.Identifier;
 import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
+import com.example.examplemod.client.HudNotificationOverlay;
 import com.example.examplemod.client.KeybindHandler;
 import com.example.examplemod.client.PlacementMode;
 
@@ -30,13 +29,6 @@ public class CrossroadDimensionClient {
     }
 
     @SubscribeEvent
-    static void onClientSetup(FMLClientSetupEvent event) {
-        // Some client setup code
-        CrossroadDimension.LOGGER.info("HELLO FROM CLIENT SETUP");
-        CrossroadDimension.LOGGER.info("MINECRAFT NAME >> {}", Minecraft.getInstance().getUser().getName());
-    }
-
-    @SubscribeEvent
     public static void registerKeys(RegisterKeyMappingsEvent event) {
         event.register(KeybindHandler.OPEN_CROSSROADS);
     }
@@ -46,7 +38,10 @@ public class CrossroadDimensionClient {
         event.registerAbove(
                 VanillaGuiLayers.CROSSHAIR,
                 Identifier.fromNamespaceAndPath(CrossroadDimension.MODID, "placement_mode"),
-                (graphics, deltaTracker) -> PlacementMode.render(graphics)
+                (graphics, deltaTracker) -> {
+                    PlacementMode.render(graphics);
+                    HudNotificationOverlay.render(graphics);
+                }
         );
     }
 }

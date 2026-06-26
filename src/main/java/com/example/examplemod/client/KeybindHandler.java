@@ -29,6 +29,7 @@ public class KeybindHandler {
 
         Minecraft mc = Minecraft.getInstance();
         PlacementMode.tick(mc, OPEN_CROSSROADS.isDown());
+        HudNotificationOverlay.tick();
     }
 
     @SubscribeEvent

@@ -5,14 +5,11 @@ import org.slf4j.Logger;
 import com.example.examplemod.client.render.ClientRenderRegistration;
 import com.example.examplemod.network.TravelNetwork;
 import com.example.examplemod.portal.CrossroadCrystalBlockEntity;
-import com.example.examplemod.portal.CrossroadsCommands;
-import com.example.examplemod.portal.CrossroadsGateBlock;
-import com.example.examplemod.portal.RealmPortalManager;
-import com.example.examplemod.portal.RealmPortalRuntime;
+import com.example.examplemod.portal.CrossroadsCrystalBlock;
+import com.example.examplemod.portal.RealmCrystalManager;
 import com.example.examplemod.realm.PocketRealmManager;
 import com.mojang.logging.LogUtils;
 
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.food.FoodProperties;
@@ -21,7 +18,6 @@ import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.material.MapColor;
 import net.neoforged.api.distmarker.Dist;
@@ -31,15 +27,9 @@ import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
 import net.neoforged.fml.ModContainer;
-import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
-import net.neoforged.neoforge.event.RegisterCommandsEvent;
-import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
-import net.neoforged.neoforge.event.server.ServerStartingEvent;
-import net.neoforged.neoforge.event.tick.PlayerTickEvent;
-import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.registries.DeferredBlock;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredItem;
@@ -64,14 +54,14 @@ public class CrossroadDimension {
     public static final DeferredBlock<Block> EXAMPLE_BLOCK = BLOCKS.registerSimpleBlock("example_block", p -> p.mapColor(MapColor.STONE));
     // Creates a new BlockItem with the id "CrossroadDimension:example_block", combining the namespace and path
     public static final DeferredItem<BlockItem> EXAMPLE_BLOCK_ITEM = ITEMS.registerSimpleBlockItem("example_block", EXAMPLE_BLOCK);
-    public static final DeferredBlock<Block> CROSSROADS_GATE = BLOCKS.registerBlock(
+    public static final DeferredBlock<Block> CROSSROADS_CRYSTAL = BLOCKS.registerBlock(
             "crossroads_gate",
-            CrossroadsGateBlock::new,
+            CrossroadsCrystalBlock::new,
             properties -> properties.mapColor(MapColor.COLOR_PURPLE).noCollision().lightLevel(state -> 10).strength(-1.0F, 3600000.0F)
     );
-    public static final DeferredItem<BlockItem> CROSSROADS_GATE_ITEM = ITEMS.registerSimpleBlockItem("crossroads_gate", CROSSROADS_GATE);
-    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<CrossroadCrystalBlockEntity>> CROSSROADS_GATE_BLOCK_ENTITY =
-            BLOCK_ENTITY_TYPES.register("crossroads_gate", () -> new BlockEntityType<>(CrossroadCrystalBlockEntity::new, CROSSROADS_GATE.get()));
+    public static final DeferredItem<BlockItem> CROSSROADS_CRYSTAL_ITEM = ITEMS.registerSimpleBlockItem("crossroads_gate", CROSSROADS_CRYSTAL);
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<CrossroadCrystalBlockEntity>> CROSSROADS_CRYSTAL_BLOCK_ENTITY =
+            BLOCK_ENTITY_TYPES.register("crossroads_gate", () -> new BlockEntityType<>(CrossroadCrystalBlockEntity::new, CROSSROADS_CRYSTAL.get()));
 
     // Creates a new food item with the id "CrossroadDimension:example_id", nutrition 1 and saturation 2
     public static final DeferredItem<Item> EXAMPLE_ITEM = ITEMS.registerSimpleItem("example_item", p -> p.food(new FoodProperties.Builder()
@@ -89,8 +79,6 @@ public class CrossroadDimension {
     // The constructor for the mod class is the first code that is run when your mod is loaded.
     // FML will recognize some parameter types like IEventBus or ModContainer and pass them in automatically.
     public CrossroadDimension(IEventBus modEventBus, ModContainer modContainer) {
-        // Register the commonSetup method for modloading
-        modEventBus.addListener(this::commonSetup);
         modEventBus.addListener(TravelNetwork::register);
 
         // Register the Deferred Register to the mod event bus so blocks get registered
@@ -117,57 +105,17 @@ public class CrossroadDimension {
         }
     }
 
-    private void commonSetup(FMLCommonSetupEvent event) {
-        // Some common setup code
-        LOGGER.info("HELLO FROM COMMON SETUP");
-
-        if (Config.LOG_DIRT_BLOCK.getAsBoolean()) {
-            LOGGER.info("DIRT BLOCK >> {}", BuiltInRegistries.BLOCK.getKey(Blocks.DIRT));
-        }
-
-        LOGGER.info("{}{}", Config.MAGIC_NUMBER_INTRODUCTION.get(), Config.MAGIC_NUMBER.getAsInt());
-
-        Config.ITEM_STRINGS.get().forEach((item) -> LOGGER.info("ITEM >> {}", item));
-    }
-
     // Add the example block item to the building blocks tab
     private void addCreative(BuildCreativeModeTabContentsEvent event) {
         if (event.getTabKey() == CreativeModeTabs.BUILDING_BLOCKS) {
             event.accept(EXAMPLE_BLOCK_ITEM);
-            event.accept(CROSSROADS_GATE_ITEM);
+            event.accept(CROSSROADS_CRYSTAL_ITEM);
         }
-    }
-
-    // You can use SubscribeEvent and let the Event Bus discover methods to call
-    @SubscribeEvent
-    public void onServerStarting(ServerStartingEvent event) {
-        // Do something when the server starts
-        LOGGER.info("HELLO from server starting");
     }
 
     @SubscribeEvent
     public void onServerStarted(ServerStartedEvent event) {
         new PocketRealmManager().initialize(event.getServer());
-        new RealmPortalManager().initialize(event.getServer());
-    }
-
-    @SubscribeEvent
-    public void onRegisterCommands(RegisterCommandsEvent event) {
-        CrossroadsCommands.register(event);
-    }
-
-    @SubscribeEvent
-    public void onPlayerTick(PlayerTickEvent.Post event) {
-        RealmPortalRuntime.onPlayerTick(event);
-    }
-
-    @SubscribeEvent
-    public void onServerTick(ServerTickEvent.Post event) {
-        RealmPortalRuntime.onServerTick(event);
-    }
-
-    @SubscribeEvent
-    public void onPlayerLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
-        RealmPortalRuntime.onPlayerLoggedOut(event);
+        new RealmCrystalManager().initialize(event.getServer());
     }
 }

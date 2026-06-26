@@ -26,10 +26,6 @@ public record PocketRealmData(
         return levelKey.identifier();
     }
 
-    public PocketRealmData withReturnLocation(GlobalPos returnLocation) {
-        return new PocketRealmData(owner, levelKey, Optional.of(returnLocation));
-    }
-
     public static PocketRealmData uncreated(UUID owner, ResourceKey<Level> levelKey) {
         return new PocketRealmData(owner, levelKey, Optional.empty());
     }

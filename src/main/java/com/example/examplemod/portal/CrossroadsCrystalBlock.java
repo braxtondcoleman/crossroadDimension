@@ -1,49 +1,41 @@
 package com.example.examplemod.portal;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.GlobalPos;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.InsideBlockEffectApplier;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.RenderShape;
-import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityTicker;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
+import net.minecraft.world.level.material.PushReaction;
 import net.minecraft.world.phys.BlockHitResult;
 import org.jspecify.annotations.Nullable;
 
-public class CrossroadsGateBlock extends Block implements EntityBlock {
+public class CrossroadsCrystalBlock extends Block implements EntityBlock {
     public static final BooleanProperty ANCHOR = BooleanProperty.create("anchor");
-    private static final RealmPortalManager PORTAL_MANAGER = new RealmPortalManager();
+    private static final RealmCrystalManager CRYSTAL_MANAGER = new RealmCrystalManager();
 
-    public CrossroadsGateBlock(Properties properties) {
+    public CrossroadsCrystalBlock(Properties properties) {
         super(properties);
         registerDefaultState(stateDefinition.any().setValue(ANCHOR, true));
-    }
-
-    @Override
-    protected void entityInside(BlockState state, Level level, BlockPos pos, Entity entity, InsideBlockEffectApplier effectApplier, boolean inside) {
-        if (!level.isClientSide() && entity instanceof ServerPlayer player) {
-            RealmPortalRuntime.playerInsideGate(player, pos);
-        }
     }
 
     @Override
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hitResult) {
         if (!level.isClientSide() && player instanceof ServerPlayer serverPlayer) {
             BlockPos anchorPos = state.getValue(ANCHOR) ? pos : pos.below();
-            if (PORTAL_MANAGER.tryReopenSealedRealm(serverPlayer, net.minecraft.core.GlobalPos.of(level.dimension(), anchorPos))) {
-                return InteractionResult.SUCCESS;
-            }
+            CRYSTAL_MANAGER.openMenu(serverPlayer, GlobalPos.of(level.dimension(), anchorPos));
+            return InteractionResult.SUCCESS;
         }
-        return InteractionResult.PASS;
+        return level.isClientSide() ? InteractionResult.SUCCESS : InteractionResult.PASS;
     }
 
     @Override
@@ -54,6 +46,11 @@ public class CrossroadsGateBlock extends Block implements EntityBlock {
     @Override
     protected RenderShape getRenderShape(BlockState state) {
         return RenderShape.INVISIBLE;
+    }
+
+    @Override
+    public PushReaction getPistonPushReaction(BlockState state) {
+        return PushReaction.BLOCK;
     }
 
     @Override
@@ -74,7 +71,7 @@ public class CrossroadsGateBlock extends Block implements EntityBlock {
             return null;
         }
 
-        return blockEntityType == com.example.examplemod.CrossroadDimension.CROSSROADS_GATE_BLOCK_ENTITY.get()
+        return blockEntityType == com.example.examplemod.CrossroadDimension.CROSSROADS_CRYSTAL_BLOCK_ENTITY.get()
                 ? (tickerLevel, pos, tickerState, blockEntity) -> CrossroadCrystalBlockEntity.tick(tickerLevel, pos, tickerState, (CrossroadCrystalBlockEntity) blockEntity)
                 : null;
     }

@@ -6,7 +6,6 @@ import java.util.Optional;
 import java.util.UUID;
 import net.commoble.infiniverse.api.InfiniverseAPI;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.GlobalPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
@@ -46,19 +45,6 @@ public class PocketRealmManager {
         saveRealm(owner.level().getServer(), realm);
         CrossroadDimension.LOGGER.info("Pocket realm metadata uses dimension key {}", realm.levelKey().identifier());
         return realm;
-    }
-
-    public PocketRealmData saveReturnLocation(ServerPlayer player, PocketRealmData realm) {
-        GlobalPos returnLocation = GlobalPos.of(player.level().dimension(), player.blockPosition());
-        PocketRealmData updatedRealm = realm.withReturnLocation(returnLocation);
-        saveRealm(player.level().getServer(), updatedRealm);
-        CrossroadDimension.LOGGER.info(
-                "Saved return location for {}: {} at {}",
-                player.getGameProfile().name(),
-                returnLocation.dimension().identifier(),
-                returnLocation.pos()
-        );
-        return updatedRealm;
     }
 
     public void initialize(MinecraftServer server) {
@@ -112,34 +98,6 @@ public class PocketRealmManager {
         realmLevel.setBlockAndUpdate(spawnPos.above(), Blocks.AIR.defaultBlockState());
         CrossroadDimension.LOGGER.info("Spawn platform ready; arrival position is {}", spawnPos);
         return spawnPos;
-    }
-
-    public void teleportTo(ServerPlayer player, ServerLevel targetLevel, BlockPos targetPos) {
-        CrossroadDimension.LOGGER.info(
-                "Teleporting {} to {} at {}",
-                player.getGameProfile().name(),
-                targetLevel.dimension().identifier(),
-                targetPos
-        );
-
-        boolean teleported = player.teleportTo(
-                targetLevel,
-                targetPos.getX() + 0.5D,
-                targetPos.getY(),
-                targetPos.getZ() + 0.5D,
-                java.util.Set.of(),
-                player.getYRot(),
-                player.getXRot(),
-                true
-        );
-
-        CrossroadDimension.LOGGER.info("Teleport result for {}: {}", player.getGameProfile().name(), teleported);
-    }
-
-    public Optional<ServerLevel> resolveReturnLevel(MinecraftServer server, PocketRealmData realm) {
-        return realm.lastReturnLocation()
-                .map(GlobalPos::dimension)
-                .map(server::getLevel);
     }
 
     public Identifier dimensionIdFor(UUID owner) {

@@ -1,6 +1,6 @@
 {
-  "block.crossroaddimension.crossroads_gate": "Crossroads Gate",
-  "item.crossroaddimension.crossroads_gate": "Crossroads Gate",
+  "block.crossroaddimension.crossroads_gate": "Crossroads Crystal",
+  "item.crossroaddimension.crossroads_gate": "Crossroads Crystal",
   "key.crossroaddimension.open": "Open Crossroads",
   "itemGroup.CrossroadDimension": "Crossroads Dimension"
 }

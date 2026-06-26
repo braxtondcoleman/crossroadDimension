@@ -23,8 +23,6 @@ public final class PlacementMode {
     private static boolean active = false;
     private static int fadeTicks = 0;
     private static int particleTicks = 0;
-    private static Component statusMessage = Component.empty();
-    private static int statusTicks = 0;
     private static boolean placedThisHold = false;
     private static final RandomSource RANDOM = RandomSource.create();
 
@@ -57,10 +55,6 @@ public final class PlacementMode {
         if (!active && fadeTicks > 0) {
             fadeTicks--;
         }
-
-        if (statusTicks > 0) {
-            statusTicks--;
-        }
     }
 
     public static boolean tryPlace(Minecraft minecraft) {
@@ -82,7 +76,7 @@ public final class PlacementMode {
             return true;
         }
 
-        showStatus(Component.literal("Summoning Realm..."));
+        showStatus(Component.literal("Anchoring Crystal..."));
         ClientPacketDistributor.sendToServer(TravelConfirmPayload.INSTANCE);
         placedThisHold = true;
         return true;
@@ -98,12 +92,6 @@ public final class PlacementMode {
             int alpha = active ? 255 : Math.round(255.0F * fadeTicks / MESSAGE_FADE_TICKS);
             int color = alpha << 24 | 0xE4C36A;
             graphics.centeredText(minecraft.font, Component.literal("Crossroads Placement"), centerX, y, color);
-        }
-
-        if (statusTicks > 0) {
-            int alpha = Math.round(255.0F * statusTicks / MESSAGE_FADE_TICKS);
-            int color = alpha << 24 | 0xEDE6FF;
-            graphics.centeredText(minecraft.font, statusMessage, centerX, y - 12, color);
         }
     }
 
@@ -158,14 +146,12 @@ public final class PlacementMode {
     }
 
     private static void showStatus(Component message) {
-        statusMessage = message;
-        statusTicks = MESSAGE_FADE_TICKS;
+        HudNotificationOverlay.push(message);
     }
 
     private static void clear() {
         active = false;
         fadeTicks = 0;
-        statusTicks = 0;
         particleTicks = 0;
         placedThisHold = false;
     }
