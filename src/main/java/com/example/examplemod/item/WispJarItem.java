@@ -17,6 +17,7 @@ import com.geckolib.renderer.GeoItemRenderer;
 import com.geckolib.util.GeckoLibUtil;
 
 import net.minecraft.network.chat.Component;
+import net.minecraft.ChatFormatting;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
@@ -28,10 +29,13 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.ItemUtils;
+import net.minecraft.world.item.TooltipFlag;
+import net.minecraft.world.item.component.TooltipDisplay;
 import net.minecraft.world.level.Level;
 
 public class WispJarItem extends Item implements GeoItem {
     public static final int MAX_RESONANCE = 100;
+    private static final int RESONANCE_USE_INTERVAL_TICKS = 40;
     private static final int USE_DURATION = 72000;
     private static final int RESCAN_INTERVAL_TICKS = 20;
     private static final int BREADCRUMB_INTERVAL_TICKS = 20;
@@ -98,8 +102,15 @@ public class WispJarItem extends Item implements GeoItem {
         if (insertedAttunement.isPresent()) {
             if (!level.isClientSide()) {
                 WispAttunement attunement = insertedAttunement.get();
+                WispJarData currentData = getData(jar);
+                if (currentData.attunement().equals(attunement.id())
+                        && currentData.resonance() >= MAX_RESONANCE) {
+                    player.sendOverlayMessage(Component.translatable(
+                            "message.crossroaddimension.wisp_jar.resonance_full"));
+                    return InteractionResult.SUCCESS;
+                }
                 jar.set(CrossroadDimension.WISP_JAR_DATA.get(),
-                        getData(jar).withAttunement(attunement, MAX_RESONANCE));
+                        currentData.withAttunement(attunement, MAX_RESONANCE));
                 if (!player.hasInfiniteMaterials()) {
                     material.shrink(1);
                 }
@@ -113,6 +124,14 @@ public class WispJarItem extends Item implements GeoItem {
             if (!level.isClientSide()) {
                 player.sendOverlayMessage(Component.translatable(
                         "message.crossroaddimension.wisp_jar.unattuned"));
+            }
+            return InteractionResult.FAIL;
+        }
+
+        if (getData(jar).resonance() <= 0) {
+            if (!level.isClientSide()) {
+                player.sendOverlayMessage(Component.translatable(
+                        "message.crossroaddimension.wisp_jar.no_resonance"));
             }
             return InteractionResult.FAIL;
         }
@@ -139,6 +158,18 @@ public class WispJarItem extends Item implements GeoItem {
 
         int ticksUsed = USE_DURATION - ticksRemaining;
         UUID playerId = player.getUUID();
+
+        if (ticksUsed > 0 && ticksUsed % RESONANCE_USE_INTERVAL_TICKS == 0) {
+            WispJarData data = getData(jar);
+            if (data.resonance() <= 0) {
+                stopSearching(player, playerId);
+                player.sendOverlayMessage(Component.translatable(
+                        "message.crossroaddimension.wisp_jar.no_resonance"));
+                return;
+            }
+            jar.set(CrossroadDimension.WISP_JAR_DATA.get(), data.withResonance(data.resonance() - 1));
+        }
+
         if (ticksUsed % RESCAN_INTERVAL_TICKS == 0 || !this.trackedSources.containsKey(playerId)) {
             List<SurveyScan.Source> nearestSources = SurveyScan.findSources(
                     serverLevel, player, attunement.get().targetTag());
@@ -178,6 +209,26 @@ public class WispJarItem extends Item implements GeoItem {
         this.activeBreadcrumbs.remove(entity.getUUID());
     }
 
+    @Override
+    @SuppressWarnings("deprecation")
+    public void appendHoverText(ItemStack stack, Item.TooltipContext context, TooltipDisplay display,
+            Consumer<Component> builder, TooltipFlag tooltipFlag) {
+        WispJarData data = getData(stack);
+        Optional<WispAttunement> attunement = getAttunement(stack);
+        Component attunementName = attunement
+                .map(WispAttunement::displayName)
+                .orElseGet(() -> Component.translatable("attunement.crossroaddimension.unattuned"));
+
+        builder.accept(Component.translatable(
+                "tooltip.crossroaddimension.wisp_jar.attunement", attunementName)
+                .withStyle(ChatFormatting.GRAY));
+        builder.accept(Component.translatable(
+                "tooltip.crossroaddimension.wisp_jar.resonance", data.resonance(), MAX_RESONANCE)
+                .withStyle(data.resonance() > 0 ? ChatFormatting.AQUA : ChatFormatting.RED));
+        builder.accept(Component.translatable("tooltip.crossroaddimension.wisp_jar.insert")
+                .withStyle(ChatFormatting.DARK_GRAY));
+    }
+
     private static SurveyScan.Source selectActiveSource(SurveyScan.Source current,
             List<SurveyScan.Source> nearestSources) {
         if (nearestSources.isEmpty()) {
@@ -204,5 +255,11 @@ public class WispJarItem extends Item implements GeoItem {
 
     private static WispJarData getData(ItemStack stack) {
         return stack.getOrDefault(CrossroadDimension.WISP_JAR_DATA.get(), WispJarData.EMPTY);
+    }
+
+    private void stopSearching(ServerPlayer player, UUID playerId) {
+        this.trackedSources.remove(playerId);
+        this.activeBreadcrumbs.remove(playerId);
+        player.stopUsingItem();
     }
 }

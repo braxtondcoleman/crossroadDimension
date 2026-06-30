@@ -20,6 +20,11 @@ public record WispJarData(String attunement, int resonance, int upgradeLevel) {
             ByteBufCodecs.VAR_INT, WispJarData::upgradeLevel,
             WispJarData::new);
 
+    public WispJarData {
+        resonance = Math.max(0, resonance);
+        upgradeLevel = Math.max(0, upgradeLevel);
+    }
+
     public WispJarData withAttunement(WispAttunement newAttunement, int newResonance) {
         return new WispJarData(newAttunement.id(), newResonance, this.upgradeLevel);
     }
