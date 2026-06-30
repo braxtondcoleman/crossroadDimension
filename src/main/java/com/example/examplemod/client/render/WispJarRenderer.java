@@ -1,13 +1,13 @@
 package com.example.examplemod.client.render;
 
-import com.example.examplemod.item.SurveyScopeItem;
+import com.example.examplemod.item.WispJarItem;
 import com.geckolib.renderer.GeoItemRenderer;
 
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.resources.Identifier;
 
-public class WispJarRenderer extends GeoItemRenderer<SurveyScopeItem> {
+public class WispJarRenderer extends GeoItemRenderer<WispJarItem> {
     public WispJarRenderer() {
         super(new WispJarModel());
         useAlternateGuiLighting();

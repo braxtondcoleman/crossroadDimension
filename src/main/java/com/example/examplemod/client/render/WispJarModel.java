@@ -1,13 +1,13 @@
 package com.example.examplemod.client.render;
 
 import com.example.examplemod.CrossroadDimension;
-import com.example.examplemod.item.SurveyScopeItem;
+import com.example.examplemod.item.WispJarItem;
 import com.geckolib.model.GeoModel;
 import com.geckolib.renderer.base.GeoRenderState;
 
 import net.minecraft.resources.Identifier;
 
-public class WispJarModel extends GeoModel<SurveyScopeItem> {
+public class WispJarModel extends GeoModel<WispJarItem> {
     private static final Identifier MODEL =
             Identifier.fromNamespaceAndPath(CrossroadDimension.MODID, "wisp_jar");
     private static final Identifier TEXTURE =
@@ -26,7 +26,7 @@ public class WispJarModel extends GeoModel<SurveyScopeItem> {
     }
 
     @Override
-    public Identifier getAnimationResource(SurveyScopeItem animatable) {
+    public Identifier getAnimationResource(WispJarItem animatable) {
         return ANIMATION;
     }
 }

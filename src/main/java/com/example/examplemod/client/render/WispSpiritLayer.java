@@ -3,8 +3,9 @@ package com.example.examplemod.client.render;
 import java.util.function.BiConsumer;
 
 import com.example.examplemod.CrossroadDimension;
-import com.example.examplemod.item.SurveyScopeItem;
+import com.example.examplemod.item.WispJarItem;
 import com.geckolib.cache.model.GeoBone;
+import com.geckolib.constant.dataticket.DataTicket;
 import com.geckolib.renderer.GeoItemRenderer;
 import com.geckolib.renderer.base.GeoRenderState;
 import com.geckolib.renderer.base.PerBoneRender;
@@ -25,15 +26,28 @@ import net.minecraft.world.item.ItemDisplayContext;
 import org.joml.Quaternionf;
 
 public class WispSpiritLayer
-        extends GeoRenderLayer<SurveyScopeItem, GeoItemRenderer.RenderData, GeoRenderState> {
+        extends GeoRenderLayer<WispJarItem, GeoItemRenderer.RenderData, GeoRenderState> {
+    private static final DataTicket<Integer> RESONANCE_COLOR =
+            DataTicket.create("wisp_jar_resonance_color", Integer.class);
     private static final String SPIRIT_ANCHOR = "SpiritAnchor";
     private static final Identifier ORB_TEXTURE =
             Identifier.fromNamespaceAndPath(CrossroadDimension.MODID, "textures/item/wisp_orb.png");
     private static final Identifier DIAMOND_TEXTURE =
             Identifier.fromNamespaceAndPath(CrossroadDimension.MODID, "textures/item/wisp_diamond.png");
 
-    public WispSpiritLayer(GeoItemRenderer<SurveyScopeItem> renderer) {
+    public WispSpiritLayer(GeoItemRenderer<WispJarItem> renderer) {
         super(renderer);
+    }
+
+    @Override
+    public void addRenderData(WispJarItem jar, GeoItemRenderer.RenderData renderData,
+            GeoRenderState renderState, float partialTick) {
+        if (renderData != null) {
+            renderState.addGeckolibData(RESONANCE_COLOR, color(0.88F,
+                    jar.getRed(renderData.itemStack()),
+                    jar.getGreen(renderData.itemStack()),
+                    jar.getBlue(renderData.itemStack())));
+        }
     }
 
     @Override
@@ -47,21 +61,16 @@ public class WispSpiritLayer
                 .ifPresentOrElse(
                         bone -> consumer.accept(bone, this::renderSpirit),
                         () -> CrossroadDimension.LOGGER.error(
-                                "Unable to find {} bone for Survey Scope rendering", SPIRIT_ANCHOR));
+                                "Unable to find {} bone for Wisp Jar rendering", SPIRIT_ANCHOR));
     }
 
     private void renderSpirit(RenderPassInfo<GeoRenderState> renderPassInfo, GeoBone bone,
             SubmitNodeCollector renderTasks) {
-        SurveyScopeItem scope = (SurveyScopeItem) renderPassInfo.renderState()
-                .getGeckolibData(GeoItemRenderer.CURRENT_ITEM);
-        if (scope == null) {
-            return;
-        }
-
         double time = renderTime(renderPassInfo.renderState());
 
         float diamondSway = Mth.sin((float) time * 0.035F) * 0.007F;
-        int diamondColor = color(0.88F, scope.getRed(), scope.getGreen(), scope.getBlue());
+        int diamondColor = renderPassInfo.renderState()
+                .getOrDefaultGeckolibData(RESONANCE_COLOR, 0xE0FFFFFF);
         renderBillboard(renderPassInfo, renderTasks, DIAMOND_TEXTURE,
                 diamondSway, 0.0F, 0.006F, 0.105F, diamondColor);
 

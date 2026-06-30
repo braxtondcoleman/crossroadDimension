@@ -3,17 +3,17 @@
   "category": "equipment",
   "key": {
     "A": "minecraft:amethyst_shard",
+    "C": "minecraft:copper_ingot",
     "G": "minecraft:gold_ingot",
-    "M": "minecraft:iron_ingot",
     "R": "minecraft:redstone",
     "S": "minecraft:spyglass"
   },
   "pattern": [
     "AGA",
     "GSG",
-    "RMR"
+    "RCR"
   ],
   "result": {
-    "id": "crossroaddimension:iron_survey_scope"
+    "id": "crossroaddimension:wisp_jar"
   }
 }

@@ -1,12 +1,13 @@
 package com.example.examplemod.item;
 
-import java.util.function.Consumer;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 
+import com.example.examplemod.CrossroadDimension;
 import com.example.examplemod.client.render.WispJarRenderer;
 import com.geckolib.animatable.GeoItem;
 import com.geckolib.animatable.client.GeoRenderProvider;
@@ -15,6 +16,7 @@ import com.geckolib.animatable.manager.AnimatableManager;
 import com.geckolib.renderer.GeoItemRenderer;
 import com.geckolib.util.GeckoLibUtil;
 
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
@@ -24,48 +26,40 @@ import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
-import net.minecraft.world.item.ItemUtils;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.ItemUtils;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.tags.TagKey;
 
-public class SurveyScopeItem extends Item implements GeoItem {
-    private final float red;
-    private final float green;
-    private final float blue;
+public class WispJarItem extends Item implements GeoItem {
+    public static final int MAX_RESONANCE = 100;
     private static final int USE_DURATION = 72000;
     private static final int RESCAN_INTERVAL_TICKS = 20;
     private static final int BREADCRUMB_INTERVAL_TICKS = 20;
     private static final int PULSE_INTERVAL_TICKS = 40;
     private static final double SOURCE_SWITCH_MARGIN = 2.0;
-    private final TagKey<Block> targetTag;
+
     private final Map<UUID, Optional<SurveyScan.Source>> trackedSources = new HashMap<>();
     private final Map<UUID, SurveyScan.Breadcrumb> activeBreadcrumbs = new HashMap<>();
     private final AnimatableInstanceCache animatableCache = GeckoLibUtil.createInstanceCache(this);
 
-    public SurveyScopeItem(Properties properties,
-                        TagKey<Block> targetTag,
-                        float red,
-                        float green,
-                        float blue) {
+    public WispJarItem(Properties properties) {
         super(properties);
-        this.targetTag = targetTag;
-        this.red = red;
-        this.green = green;
-        this.blue = blue;
     }
 
-    public float getRed() {
-    return red;
+    public Optional<WispAttunement> getAttunement(ItemStack stack) {
+        return WispAttunement.byId(getData(stack).attunement());
     }
 
-    public float getGreen() {
-        return green;
+    public float getRed(ItemStack stack) {
+        return getAttunement(stack).map(WispAttunement::red).orElse(1.0F);
     }
 
-    public float getBlue() {
-        return blue;
+    public float getGreen(ItemStack stack) {
+        return getAttunement(stack).map(WispAttunement::green).orElse(1.0F);
+    }
+
+    public float getBlue(ItemStack stack) {
+        return getAttunement(stack).map(WispAttunement::blue).orElse(1.0F);
     }
 
     @Override
@@ -95,6 +89,34 @@ public class SurveyScopeItem extends Item implements GeoItem {
 
     @Override
     public InteractionResult use(Level level, Player player, InteractionHand hand) {
+        ItemStack jar = player.getItemInHand(hand);
+        InteractionHand materialHand = hand == InteractionHand.MAIN_HAND
+                ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND;
+        ItemStack material = player.getItemInHand(materialHand);
+        Optional<WispAttunement> insertedAttunement = WispAttunement.fromMaterial(material);
+
+        if (insertedAttunement.isPresent()) {
+            if (!level.isClientSide()) {
+                WispAttunement attunement = insertedAttunement.get();
+                jar.set(CrossroadDimension.WISP_JAR_DATA.get(),
+                        getData(jar).withAttunement(attunement, MAX_RESONANCE));
+                if (!player.hasInfiniteMaterials()) {
+                    material.shrink(1);
+                }
+                player.sendOverlayMessage(Component.translatable(
+                        "message.crossroaddimension.wisp_jar.attuned", attunement.displayName()));
+            }
+            return InteractionResult.SUCCESS;
+        }
+
+        if (getAttunement(jar).isEmpty()) {
+            if (!level.isClientSide()) {
+                player.sendOverlayMessage(Component.translatable(
+                        "message.crossroaddimension.wisp_jar.unattuned"));
+            }
+            return InteractionResult.FAIL;
+        }
+
         return ItemUtils.startUsingInstantly(level, player, hand);
     }
 
@@ -104,48 +126,56 @@ public class SurveyScopeItem extends Item implements GeoItem {
     }
 
     @Override
-    public void onUseTick(Level level, LivingEntity livingEntity, ItemStack scope, int ticksRemaining) {
+    public void onUseTick(Level level, LivingEntity livingEntity, ItemStack jar, int ticksRemaining) {
         if (!(level instanceof ServerLevel serverLevel) || !(livingEntity instanceof ServerPlayer player)) {
+            return;
+        }
+
+        Optional<WispAttunement> attunement = getAttunement(jar);
+        if (attunement.isEmpty()) {
+            player.stopUsingItem();
             return;
         }
 
         int ticksUsed = USE_DURATION - ticksRemaining;
         UUID playerId = player.getUUID();
-        if (ticksUsed % RESCAN_INTERVAL_TICKS == 0 || !trackedSources.containsKey(playerId)) {
-            List<SurveyScan.Source> nearestSources = SurveyScan.findSources(serverLevel, player, this.targetTag);
-            SurveyScan.Source current = trackedSources.getOrDefault(playerId, Optional.empty()).orElse(null);
-            trackedSources.put(playerId, Optional.ofNullable(selectActiveSource(current, nearestSources)));
+        if (ticksUsed % RESCAN_INTERVAL_TICKS == 0 || !this.trackedSources.containsKey(playerId)) {
+            List<SurveyScan.Source> nearestSources = SurveyScan.findSources(
+                    serverLevel, player, attunement.get().targetTag());
+            SurveyScan.Source current = this.trackedSources
+                    .getOrDefault(playerId, Optional.empty()).orElse(null);
+            this.trackedSources.put(playerId, Optional.ofNullable(selectActiveSource(current, nearestSources)));
         }
 
-        SurveyScan.Source source = trackedSources.getOrDefault(playerId, Optional.empty()).orElse(null);
+        SurveyScan.Source source = this.trackedSources.getOrDefault(playerId, Optional.empty()).orElse(null);
         if (source == null) {
-            activeBreadcrumbs.remove(playerId);
+            this.activeBreadcrumbs.remove(playerId);
             return;
         }
 
-        if (!activeBreadcrumbs.containsKey(playerId) && ticksUsed % BREADCRUMB_INTERVAL_TICKS == 0) {
-            SurveyScan.Breadcrumb breadcrumb = SurveyScan.createBreadcrumb(player, source, this);
+        if (!this.activeBreadcrumbs.containsKey(playerId) && ticksUsed % BREADCRUMB_INTERVAL_TICKS == 0) {
+            SurveyScan.Breadcrumb breadcrumb = SurveyScan.createBreadcrumb(player, source, this, jar);
             if (breadcrumb != null) {
-                activeBreadcrumbs.put(playerId, breadcrumb);
+                this.activeBreadcrumbs.put(playerId, breadcrumb);
             }
         }
 
-        SurveyScan.Breadcrumb breadcrumb = activeBreadcrumbs.get(playerId);
+        SurveyScan.Breadcrumb breadcrumb = this.activeBreadcrumbs.get(playerId);
         if (breadcrumb != null && !SurveyScan.tickBreadcrumb(serverLevel, player, breadcrumb)) {
-            activeBreadcrumbs.remove(playerId);
+            this.activeBreadcrumbs.remove(playerId);
         }
 
         if (ticksUsed > 0 && ticksUsed % PULSE_INTERVAL_TICKS == 0) {
             serverLevel.playSound(null, player.blockPosition(), SoundEvents.AMETHYST_BLOCK_CHIME,
                     SoundSource.PLAYERS, 0.4F, 1.2F);
-            scope.hurtAndBreak(1, player, player.getUsedItemHand());
+            jar.hurtAndBreak(1, player, player.getUsedItemHand());
         }
     }
 
     @Override
     public void onStopUsing(ItemStack stack, LivingEntity entity, int count) {
-        trackedSources.remove(entity.getUUID());
-        activeBreadcrumbs.remove(entity.getUUID());
+        this.trackedSources.remove(entity.getUUID());
+        this.activeBreadcrumbs.remove(entity.getUUID());
     }
 
     private static SurveyScan.Source selectActiveSource(SurveyScan.Source current,
@@ -170,5 +200,9 @@ public class SurveyScopeItem extends Item implements GeoItem {
         double nearestDistance = Math.sqrt(nearest.distanceSquared());
         double currentDistance = Math.sqrt(refreshedCurrent.distanceSquared());
         return nearestDistance + SOURCE_SWITCH_MARGIN <= currentDistance ? nearest : refreshedCurrent;
+    }
+
+    private static WispJarData getData(ItemStack stack) {
+        return stack.getOrDefault(CrossroadDimension.WISP_JAR_DATA.get(), WispJarData.EMPTY);
     }
 }

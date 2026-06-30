@@ -1,13 +1,11 @@
 package com.example.examplemod;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import org.slf4j.Logger;
 
 import com.example.examplemod.client.render.ClientRenderRegistration;
 import com.example.examplemod.network.TravelNetwork;
-import com.example.examplemod.item.SurveyScopeItem;
+import com.example.examplemod.item.WispJarData;
+import com.example.examplemod.item.WispJarItem;
 import com.example.examplemod.portal.CrossroadCrystalBlockEntity;
 import com.example.examplemod.portal.CrossroadsCrystalBlock;
 import com.example.examplemod.portal.RealmCrystalManager;
@@ -15,7 +13,7 @@ import com.example.examplemod.realm.PocketRealmManager;
 import com.mojang.logging.LogUtils;
 
 import net.minecraft.core.registries.Registries;
-import net.minecraft.tags.TagKey;
+import net.minecraft.core.component.DataComponentType;
 import net.minecraft.network.chat.Component;
 import net.minecraft.core.particles.ParticleType;
 import net.minecraft.core.particles.SimpleParticleType;
@@ -35,7 +33,6 @@ import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.neoforge.common.Tags;
 import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.registries.DeferredBlock;
@@ -54,11 +51,12 @@ public class CrossroadDimension {
         public static final DeferredRegister.Blocks BLOCKS = DeferredRegister.createBlocks(MODID);
         // Create a Deferred Register to hold Items which will all be registered under the "CrossroadDimension" namespace
         public static final DeferredRegister.Items ITEMS = DeferredRegister.createItems(MODID);
+        public static final DeferredRegister<DataComponentType<?>> DATA_COMPONENT_TYPES =
+                DeferredRegister.create(Registries.DATA_COMPONENT_TYPE, MODID);
         public static final DeferredRegister<ParticleType<?>> PARTICLE_TYPES = DeferredRegister.create(Registries.PARTICLE_TYPE, MODID);
         public static final DeferredRegister<BlockEntityType<?>> BLOCK_ENTITY_TYPES = DeferredRegister.create(Registries.BLOCK_ENTITY_TYPE, MODID);
         // Create a Deferred Register to hold CreativeModeTabs which will all be registered under the "CrossroadDimension" namespace
         public static final DeferredRegister<CreativeModeTab> CREATIVE_MODE_TABS = DeferredRegister.create(Registries.CREATIVE_MODE_TAB, MODID);
-        private static final List<DeferredItem<SurveyScopeItem>> SURVEY_SCOPE_ITEMS = new ArrayList<>();
 
         // Creates a new Block with the id "CrossroadDimension:example_block", combining the namespace and path
         public static final DeferredBlock<Block> EXAMPLE_BLOCK = BLOCKS.registerSimpleBlock("example_block", p -> p.mapColor(MapColor.STONE));
@@ -76,45 +74,16 @@ public class CrossroadDimension {
         // Creates a new food item with the id "CrossroadDimension:example_id", nutrition 1 and saturation 2
         public static final DeferredItem<Item> EXAMPLE_ITEM = ITEMS.registerSimpleItem("example_item", p -> p.food(new FoodProperties.Builder()
                 .alwaysEdible().nutrition(1).saturationModifier(2f).build()));
-        public static final DeferredItem<SurveyScopeItem> COAL_SURVEY_SCOPE =
-                registerSurveyScope("coal_survey_scope", Tags.Blocks.ORES_COAL,
-                        0.25F, 0.25F, 0.25F);
-
-        public static final DeferredItem<SurveyScopeItem> IRON_SURVEY_SCOPE =
-                registerSurveyScope("iron_survey_scope", Tags.Blocks.ORES_IRON,
-                        0.85F, 0.90F, 0.95F);
-
-        public static final DeferredItem<SurveyScopeItem> COPPER_SURVEY_SCOPE =
-                registerSurveyScope("copper_survey_scope", Tags.Blocks.ORES_COPPER,
-                        0.78F, 0.42F, 0.23F);
-
-        public static final DeferredItem<SurveyScopeItem> GOLD_SURVEY_SCOPE =
-                registerSurveyScope("gold_survey_scope", Tags.Blocks.ORES_GOLD,
-                        1.00F, 0.88F, 0.20F);
-
-        public static final DeferredItem<SurveyScopeItem> REDSTONE_SURVEY_SCOPE =
-                registerSurveyScope("redstone_survey_scope", Tags.Blocks.ORES_REDSTONE,
-                        1.00F, 0.20F, 0.20F);
-
-        public static final DeferredItem<SurveyScopeItem> LAPIS_SURVEY_SCOPE =
-                registerSurveyScope("lapis_survey_scope", Tags.Blocks.ORES_LAPIS,
-                        0.30F, 0.50F, 1.00F);
-
-        public static final DeferredItem<SurveyScopeItem> DIAMOND_SURVEY_SCOPE =
-                registerSurveyScope("diamond_survey_scope", Tags.Blocks.ORES_DIAMOND,
-                        0.40F, 0.95F, 1.00F);
-
-        public static final DeferredItem<SurveyScopeItem> EMERALD_SURVEY_SCOPE =
-                registerSurveyScope("emerald_survey_scope", Tags.Blocks.ORES_EMERALD,
-                        0.30F, 1.00F, 0.45F);
-
-        public static final DeferredItem<SurveyScopeItem> QUARTZ_SURVEY_SCOPE =
-                registerSurveyScope("quartz_survey_scope", Tags.Blocks.ORES_QUARTZ,
-                        1.00F, 0.97F, 0.90F);
-
-        public static final DeferredItem<SurveyScopeItem> ANCIENT_DEBRIS_SURVEY_SCOPE =
-                registerSurveyScope("ancient_debris_survey_scope", Tags.Blocks.ORES_NETHERITE_SCRAP,
-                        0.84F, 0.48F, 0.29F);
+        public static final DeferredHolder<DataComponentType<?>, DataComponentType<WispJarData>> WISP_JAR_DATA =
+                DATA_COMPONENT_TYPES.register("wisp_jar_data", () -> DataComponentType.<WispJarData>builder()
+                        .persistent(WispJarData.CODEC)
+                        .networkSynchronized(WispJarData.STREAM_CODEC)
+                        .build());
+        public static final DeferredItem<WispJarItem> WISP_JAR = ITEMS.registerItem(
+                "wisp_jar",
+                WispJarItem::new,
+                properties -> properties.durability(100)
+                        .component(WISP_JAR_DATA.get(), WispJarData.EMPTY));
         public static final DeferredHolder<ParticleType<?>, SimpleParticleType> SURVEY_WISP_PARTICLE =
                 PARTICLE_TYPES.register("survey_wisp", () -> new SimpleParticleType(false));
 
@@ -125,24 +94,8 @@ public class CrossroadDimension {
                 .icon(() -> EXAMPLE_ITEM.get().getDefaultInstance())
                 .displayItems((parameters, output) -> {
                         output.accept(EXAMPLE_ITEM.get()); // Add the example item to the tab. For your own tabs, this method is preferred over the event
-                        SURVEY_SCOPE_ITEMS.forEach(scope -> output.accept(scope.get()));
+                        output.accept(WISP_JAR.get());
                 }).build());
-
-        private static DeferredItem<SurveyScopeItem> registerSurveyScope(
-                String name,
-                TagKey<Block> targetTag,
-                float red,
-                float green,
-                float blue) {
-
-                DeferredItem<SurveyScopeItem> scope = ITEMS.registerItem(
-                        name,
-                        properties -> new SurveyScopeItem(properties, targetTag, red, green, blue),
-                        properties -> properties.durability(100));
-
-                SURVEY_SCOPE_ITEMS.add(scope);
-                return scope;
-        }
 
         // The constructor for the mod class is the first code that is run when your mod is loaded.
         // FML will recognize some parameter types like IEventBus or ModContainer and pass them in automatically.
@@ -153,6 +106,7 @@ public class CrossroadDimension {
                 BLOCKS.register(modEventBus);
                 // Register the Deferred Register to the mod event bus so items get registered
                 ITEMS.register(modEventBus);
+                DATA_COMPONENT_TYPES.register(modEventBus);
                 PARTICLE_TYPES.register(modEventBus);
                 BLOCK_ENTITY_TYPES.register(modEventBus);
                 // Register the Deferred Register to the mod event bus so tabs get registered

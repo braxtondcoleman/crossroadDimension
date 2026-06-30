@@ -16,6 +16,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.tags.TagKey;
 import net.minecraft.util.Mth;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
@@ -51,7 +52,7 @@ public final class SurveyScan {
         return List.copyOf(sources.subList(0, Math.min(MAX_DISPLAYED_SOURCES, sources.size())));
     }
 
-    public static Breadcrumb createBreadcrumb(ServerPlayer player, Source source, SurveyScopeItem scope) {
+    public static Breadcrumb createBreadcrumb(ServerPlayer player, Source source, WispJarItem jar, ItemStack stack) {
         Vec3 position = player.getEyePosition();
         Vec3 towardSource = source.target().getCenter().subtract(position);
         if (towardSource.lengthSqr() < 0.0001) {
@@ -62,9 +63,9 @@ public final class SurveyScan {
             position,
             towardSource.normalize().scale(BREADCRUMB_SPEED),
             source.target().getCenter(),
-            scope.getRed(),
-            scope.getGreen(),
-            scope.getBlue()
+            jar.getRed(stack),
+            jar.getGreen(stack),
+            jar.getBlue(stack)
         );
     }
 
