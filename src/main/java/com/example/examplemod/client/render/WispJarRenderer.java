@@ -11,6 +11,7 @@ public class WispJarRenderer extends GeoItemRenderer<SurveyScopeItem> {
     public WispJarRenderer() {
         super(new WispJarModel());
         useAlternateGuiLighting();
+        withRenderLayer(new WispSpiritLayer(this));
     }
 
     @Override
