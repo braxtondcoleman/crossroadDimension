@@ -16,7 +16,7 @@ import net.neoforged.neoforge.client.event.RegisterParticleProvidersEvent;
 import com.example.examplemod.client.HudNotificationOverlay;
 import com.example.examplemod.client.KeybindHandler;
 import com.example.examplemod.client.PlacementMode;
-import com.example.examplemod.client.SurveyWispParticle;
+import com.example.examplemod.client.WispBreadcrumbParticle;
 
 // This class will not load on dedicated servers. Accessing client side code from here is safe.
 @Mod(value = CrossroadDimension.MODID, dist = Dist.CLIENT)
@@ -49,6 +49,6 @@ public class CrossroadDimensionClient {
 
     @SubscribeEvent
     public static void registerParticleProviders(RegisterParticleProvidersEvent event) {
-        event.registerSpriteSet(CrossroadDimension.SURVEY_WISP_PARTICLE.get(), SurveyWispParticle.Provider::new);
+        event.registerSpriteSet(CrossroadDimension.WISP_BREADCRUMB_PARTICLE.get(), WispBreadcrumbParticle.Provider::new);
     }
 }

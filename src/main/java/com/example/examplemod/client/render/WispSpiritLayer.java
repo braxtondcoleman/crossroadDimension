@@ -5,6 +5,7 @@ import java.util.function.BiConsumer;
 import com.example.examplemod.CrossroadDimension;
 import com.example.examplemod.item.WispJarItem;
 import com.geckolib.cache.model.GeoBone;
+import com.geckolib.constant.DataTickets;
 import com.geckolib.constant.dataticket.DataTicket;
 import com.geckolib.renderer.GeoItemRenderer;
 import com.geckolib.renderer.base.GeoRenderState;
@@ -18,6 +19,7 @@ import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.resources.Identifier;
+import net.minecraft.util.ARGB;
 import net.minecraft.util.LightCoordsUtil;
 import net.minecraft.util.Mth;
 import net.minecraft.util.Util;
@@ -43,7 +45,7 @@ public class WispSpiritLayer
     public void addRenderData(WispJarItem jar, GeoItemRenderer.RenderData renderData,
             GeoRenderState renderState, float partialTick) {
         if (renderData != null) {
-            renderState.addGeckolibData(RESONANCE_COLOR, color(0.88F,
+            renderState.addGeckolibData(RESONANCE_COLOR, ARGB.colorFromFloat(1.0F,
                     jar.getRed(renderData.itemStack()),
                     jar.getGreen(renderData.itemStack()),
                     jar.getBlue(renderData.itemStack())));
@@ -64,24 +66,42 @@ public class WispSpiritLayer
                                 "Unable to find {} bone for Wisp Jar rendering", SPIRIT_ANCHOR));
     }
 
-    private void renderSpirit(RenderPassInfo<GeoRenderState> renderPassInfo, GeoBone bone,
+    private void renderSpirit(RenderPassInfo<GeoRenderState> renderPassInfo, GeoBone ignoredBone,
             SubmitNodeCollector renderTasks) {
-        double time = renderTime(renderPassInfo.renderState());
+        float time = (float) renderTime(renderPassInfo.renderState());
+        // Organic wandering instead of a perfect orbit
+        float driftY = Mth.sin(time * 0.023F + 0.6F) * 0.005F;
 
-        float diamondSway = Mth.sin((float) time * 0.035F) * 0.007F;
-        int diamondColor = renderPassInfo.renderState()
+        float orbX =
+                Mth.sin(time * 0.014F) * 0.060F +
+                Mth.sin(time * 0.027F + 2.3F) * 0.028F;
+
+        float orbZ =
+                Mth.cos(time * 0.016F + 1.4F) * 0.050F +
+                Mth.sin(time * 0.022F + 0.8F) * 0.022F;
+        float orbY = 0.21F + Mth.sin(time * 0.072F) * 0.045F + driftY;
+        float orbScale = 0.75F * (1.0F + Mth.sin(time * 0.068F) * 0.15F);
+        float orbAlpha = 0.72F + Mth.sin(time * 0.055F) * 0.10F;
+        int orbColor = renderPassInfo.renderState()
+                .getOrDefaultGeckolibData(RESONANCE_COLOR, ARGB.white(1.0F));
+        renderBillboard(renderPassInfo, renderTasks, ORB_TEXTURE,
+                orbX, orbY, orbZ, orbScale * 1.5F, ARGB.white(0.22F));
+        renderBillboard(renderPassInfo, renderTasks, ORB_TEXTURE,
+                orbX, orbY, orbZ, orbScale,
+                ARGB.color(orbAlpha, orbColor));
+
+        float diamondSway = Mth.sin(time * 0.035F) * 0.006F;
+        float diamondY = Mth.sin(time * 0.028F + 1.6F) * 0.010F;
+        float diamondScale = 0.6F * (1.0F + Mth.sin(time * 0.08F + 1.2F) * 0.08F);
+        float diamondAlpha = 1.0F;
+        int resonanceColor = renderPassInfo.renderState()
                 .getOrDefaultGeckolibData(RESONANCE_COLOR, 0xE0FFFFFF);
         renderBillboard(renderPassInfo, renderTasks, DIAMOND_TEXTURE,
-                diamondSway, 0.0F, 0.006F, 0.105F, diamondColor);
-
-        float orbit = (float) time * 0.045F;
-        float orbX = Mth.cos(orbit) * 0.042F;
-        float orbZ = Mth.sin(orbit) * 0.026F;
-        float orbY = 0.025F + Mth.sin((float) time * 0.085F) * 0.035F;
-        float orbScale = 0.22F * (1.0F + Mth.sin((float) time * 0.11F) * 0.08F);
-        float orbAlpha = 0.63F + Mth.sin((float) time * 0.075F) * 0.12F;
-        renderBillboard(renderPassInfo, renderTasks, ORB_TEXTURE,
-                orbX, orbY, orbZ, orbScale, color(orbAlpha, 1.0F, 1.0F, 1.0F));
+                diamondSway + 0.006F,
+                diamondY,
+                0.020F,
+                diamondScale,
+                resonanceColor);
     }
 
     private static double renderTime(GeoRenderState renderState) {
@@ -105,14 +125,15 @@ public class WispSpiritLayer
         poseStack.mulPose(inversePoseRotation);
 
         ItemDisplayContext context = renderPassInfo.renderState()
-                .getOrDefaultGeckolibData(com.geckolib.constant.DataTickets.ITEM_RENDER_PERSPECTIVE,
+                .getOrDefaultGeckolibData(DataTickets.ITEM_RENDER_PERSPECTIVE,
                         ItemDisplayContext.NONE);
         if (context != ItemDisplayContext.GUI) {
             poseStack.mulPose(renderPassInfo.cameraState().orientation);
         }
 
         poseStack.scale(size, size, size);
-        renderTasks.submitCustomGeometry(poseStack, RenderTypes.entityTranslucentEmissive(texture, false),
+        renderTasks.submitCustomGeometry(poseStack,
+                RenderTypes.textSeeThrough(texture),
                 (pose, buffer) -> {
                     vertex(buffer, pose, -0.5F, -0.5F, 0.0F, color, 0.0F, 1.0F);
                     vertex(buffer, pose, 0.5F, -0.5F, 0.0F, color, 1.0F, 1.0F);
@@ -132,11 +153,4 @@ public class WispSpiritLayer
                 .setNormal(pose, 0.0F, 0.0F, 1.0F);
     }
 
-    private static int color(float alpha, float red, float green, float blue) {
-        int a = Mth.clamp(Math.round(alpha * 255.0F), 0, 255);
-        int r = Mth.clamp(Math.round(red * 255.0F), 0, 255);
-        int g = Mth.clamp(Math.round(green * 255.0F), 0, 255);
-        int b = Mth.clamp(Math.round(blue * 255.0F), 0, 255);
-        return a << 24 | r << 16 | g << 8 | b;
-    }
 }

@@ -9,8 +9,8 @@ import net.minecraft.core.particles.SimpleParticleType;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 
-public class SurveyWispParticle extends SingleQuadParticle {
-    private SurveyWispParticle(ClientLevel level, double x, double y, double z,
+public class WispBreadcrumbParticle extends SingleQuadParticle {
+    private WispBreadcrumbParticle(ClientLevel level, double x, double y, double z,
             float size, float opacity, SpriteSet sprites) {
         super(level, x, y, z, sprites.first());
         this.quadSize = Mth.clamp(size, 0.02F, 0.24F);
@@ -38,7 +38,7 @@ public class SurveyWispParticle extends SingleQuadParticle {
         @Override
         public Particle createParticle(SimpleParticleType type, ClientLevel level,
                 double x, double y, double z, double size, double opacity, double ignored, RandomSource random) {
-            return new SurveyWispParticle(level, x, y, z, (float) size, (float) opacity, this.sprites);
+            return new WispBreadcrumbParticle(level, x, y, z, (float) size, (float) opacity, this.sprites);
         }
     }
 }

@@ -84,8 +84,8 @@ public class CrossroadDimension {
                 WispJarItem::new,
                 properties -> properties.durability(100)
                         .component(WISP_JAR_DATA.get(), WispJarData.EMPTY));
-        public static final DeferredHolder<ParticleType<?>, SimpleParticleType> SURVEY_WISP_PARTICLE =
-                PARTICLE_TYPES.register("survey_wisp", () -> new SimpleParticleType(false));
+        public static final DeferredHolder<ParticleType<?>, SimpleParticleType> WISP_BREADCRUMB_PARTICLE =
+                PARTICLE_TYPES.register("wisp_breadcrumb", () -> new SimpleParticleType(false));
 
           // Creates a creative tab with the id "CrossroadDimension:example_tab" for the example item, that is placed after the combat tab
         public static final DeferredHolder<CreativeModeTab, CreativeModeTab> EXAMPLE_TAB = CREATIVE_MODE_TABS.register("example_tab", () -> CreativeModeTab.builder()
@@ -105,8 +105,8 @@ public class CrossroadDimension {
                 // Register the Deferred Register to the mod event bus so blocks get registered
                 BLOCKS.register(modEventBus);
                 // Register the Deferred Register to the mod event bus so items get registered
-                ITEMS.register(modEventBus);
                 DATA_COMPONENT_TYPES.register(modEventBus);
+                ITEMS.register(modEventBus);
                 PARTICLE_TYPES.register(modEventBus);
                 BLOCK_ENTITY_TYPES.register(modEventBus);
                 // Register the Deferred Register to the mod event bus so tabs get registered

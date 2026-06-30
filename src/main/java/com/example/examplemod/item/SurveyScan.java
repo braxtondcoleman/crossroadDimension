@@ -132,7 +132,7 @@ public final class SurveyScan {
             opacity = Mth.lerp(progress, 0.82F, 0.0F);
         }
 
-        level.sendParticles(player, CrossroadDimension.SURVEY_WISP_PARTICLE.get(),
+        level.sendParticles(player, CrossroadDimension.WISP_BREADCRUMB_PARTICLE.get(),
                 false, true, position.x, position.y, position.z, 0,
                 size, opacity, 0.0, 1.0);
     }
