@@ -1,6 +1,16 @@
 {
   "block.crossroaddimension.crossroads_gate": "Crossroads Crystal",
   "item.crossroaddimension.crossroads_gate": "Crossroads Crystal",
+  "item.crossroaddimension.coal_survey_scope": "Coal Survey Scope",
+  "item.crossroaddimension.iron_survey_scope": "Iron Survey Scope",
+  "item.crossroaddimension.copper_survey_scope": "Copper Survey Scope",
+  "item.crossroaddimension.gold_survey_scope": "Gold Survey Scope",
+  "item.crossroaddimension.redstone_survey_scope": "Redstone Survey Scope",
+  "item.crossroaddimension.lapis_survey_scope": "Lapis Survey Scope",
+  "item.crossroaddimension.diamond_survey_scope": "Diamond Survey Scope",
+  "item.crossroaddimension.emerald_survey_scope": "Emerald Survey Scope",
+  "item.crossroaddimension.quartz_survey_scope": "Quartz Survey Scope",
+  "item.crossroaddimension.ancient_debris_survey_scope": "Ancient Debris Survey Scope",
   "key.crossroaddimension.open": "Open Crossroads",
   "itemGroup.CrossroadDimension": "Crossroads Dimension"
 }

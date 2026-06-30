@@ -1,0 +1,9 @@
+{
+  "model": {
+    "type": "minecraft:special",
+    "base": "crossroaddimension:item/wisp_jar",
+    "model": {
+      "type": "geckolib:geckolib"
+    }
+  }
+}

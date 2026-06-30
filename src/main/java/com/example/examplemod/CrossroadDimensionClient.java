@@ -12,9 +12,11 @@ import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 import net.minecraft.resources.Identifier;
 import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
+import net.neoforged.neoforge.client.event.RegisterParticleProvidersEvent;
 import com.example.examplemod.client.HudNotificationOverlay;
 import com.example.examplemod.client.KeybindHandler;
 import com.example.examplemod.client.PlacementMode;
+import com.example.examplemod.client.SurveyWispParticle;
 
 // This class will not load on dedicated servers. Accessing client side code from here is safe.
 @Mod(value = CrossroadDimension.MODID, dist = Dist.CLIENT)
@@ -43,5 +45,10 @@ public class CrossroadDimensionClient {
                     HudNotificationOverlay.render(graphics);
                 }
         );
+    }
+
+    @SubscribeEvent
+    public static void registerParticleProviders(RegisterParticleProvidersEvent event) {
+        event.registerSpriteSet(CrossroadDimension.SURVEY_WISP_PARTICLE.get(), SurveyWispParticle.Provider::new);
     }
 }

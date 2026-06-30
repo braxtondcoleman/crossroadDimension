@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "key": {
+    "A": "minecraft:amethyst_shard",
+    "G": "minecraft:gold_ingot",
+    "M": "minecraft:lapis_lazuli",
+    "R": "minecraft:redstone",
+    "S": "minecraft:spyglass"
+  },
+  "pattern": [
+    "AGA",
+    "GSG",
+    "RMR"
+  ],
+  "result": {
+    "id": "crossroaddimension:lapis_survey_scope"
+  }
+}
