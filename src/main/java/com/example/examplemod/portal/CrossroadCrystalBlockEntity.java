@@ -6,6 +6,7 @@ import com.geckolib.animatable.instance.AnimatableInstanceCache;
 import com.geckolib.animatable.manager.AnimatableManager;
 import com.geckolib.animation.AnimationController;
 import com.geckolib.animation.RawAnimation;
+import com.geckolib.animation.keyframehandler.AutoPlayingSoundKeyframeHandler;
 import com.geckolib.util.GeckoLibUtil;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -153,7 +154,7 @@ public class CrossroadCrystalBlockEntity extends BlockEntity implements GeoBlock
             case SLAMMING, SLAM_HELD -> state.setAndContinue(SLAM);
             case REFORMING -> state.setAndContinue(REFORM);
             case IDLE -> state.setAndContinue(IDLE);
-        }).setTransitionTicks(0));
+        }).setTransitionTicks(0).setSoundKeyframeHandler(new AutoPlayingSoundKeyframeHandler<>()));
     }
 
     private SequencePhase syncedPhaseFor(VisualMode mode) {

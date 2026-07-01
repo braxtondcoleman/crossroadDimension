@@ -116,6 +116,8 @@ public class WispJarItem extends Item implements GeoItem {
                 }
                 player.sendOverlayMessage(Component.translatable(
                         "message.crossroaddimension.wisp_jar.attuned", attunement.displayName()));
+                level.playSound(null, player.blockPosition(), CrossroadDimension.WISP_ATTUNEMENT.get(),
+                        SoundSource.PLAYERS, 1.0F, 1.0F);
             }
             return InteractionResult.SUCCESS;
         }

@@ -17,6 +17,8 @@ import net.minecraft.core.component.DataComponentType;
 import net.minecraft.network.chat.Component;
 import net.minecraft.core.particles.ParticleType;
 import net.minecraft.core.particles.SimpleParticleType;
+import net.minecraft.resources.Identifier;
+import net.minecraft.sounds.SoundEvent;
 import net.minecraft.world.food.FoodProperties;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.CreativeModeTab;
@@ -54,6 +56,7 @@ public class CrossroadDimension {
         public static final DeferredRegister<DataComponentType<?>> DATA_COMPONENT_TYPES =
                 DeferredRegister.create(Registries.DATA_COMPONENT_TYPE, MODID);
         public static final DeferredRegister<ParticleType<?>> PARTICLE_TYPES = DeferredRegister.create(Registries.PARTICLE_TYPE, MODID);
+        public static final DeferredRegister<SoundEvent> SOUND_EVENTS = DeferredRegister.create(Registries.SOUND_EVENT, MODID);
         public static final DeferredRegister<BlockEntityType<?>> BLOCK_ENTITY_TYPES = DeferredRegister.create(Registries.BLOCK_ENTITY_TYPE, MODID);
         // Create a Deferred Register to hold CreativeModeTabs which will all be registered under the "CrossroadDimension" namespace
         public static final DeferredRegister<CreativeModeTab> CREATIVE_MODE_TABS = DeferredRegister.create(Registries.CREATIVE_MODE_TAB, MODID);
@@ -86,6 +89,10 @@ public class CrossroadDimension {
                         .component(WISP_JAR_DATA.get(), WispJarData.EMPTY));
         public static final DeferredHolder<ParticleType<?>, SimpleParticleType> WISP_BREADCRUMB_PARTICLE =
                 PARTICLE_TYPES.register("wisp_breadcrumb", () -> new SimpleParticleType(false));
+        public static final DeferredHolder<SoundEvent, SoundEvent> CRYSTAL_IDLE_LOOP = registerSound("crystal_idle_loop");
+        public static final DeferredHolder<SoundEvent, SoundEvent> CRYSTAL_REFORM = registerSound("crystal_reform");
+        public static final DeferredHolder<SoundEvent, SoundEvent> CRYSTAL_SLAM = registerSound("crystal_slam");
+        public static final DeferredHolder<SoundEvent, SoundEvent> WISP_ATTUNEMENT = registerSound("wisp_attunement");
 
           // Creates a creative tab with the id "CrossroadDimension:example_tab" for the example item, that is placed after the combat tab
         public static final DeferredHolder<CreativeModeTab, CreativeModeTab> EXAMPLE_TAB = CREATIVE_MODE_TABS.register("example_tab", () -> CreativeModeTab.builder()
@@ -108,6 +115,7 @@ public class CrossroadDimension {
                 DATA_COMPONENT_TYPES.register(modEventBus);
                 ITEMS.register(modEventBus);
                 PARTICLE_TYPES.register(modEventBus);
+                SOUND_EVENTS.register(modEventBus);
                 BLOCK_ENTITY_TYPES.register(modEventBus);
                 // Register the Deferred Register to the mod event bus so tabs get registered
                 CREATIVE_MODE_TABS.register(modEventBus);
@@ -140,5 +148,10 @@ public class CrossroadDimension {
         public void onServerStarted(ServerStartedEvent event) {
                 new PocketRealmManager().initialize(event.getServer());
                 new RealmCrystalManager().initialize(event.getServer());
+        }
+
+        private static DeferredHolder<SoundEvent, SoundEvent> registerSound(String name) {
+                return SOUND_EVENTS.register(name, () -> SoundEvent.createVariableRangeEvent(
+                        Identifier.fromNamespaceAndPath(MODID, name)));
         }
 }

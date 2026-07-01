@@ -1,0 +1,35 @@
+{
+  "crystal_idle_loop": {
+    "sounds": [
+      {
+        "name": "crossroaddimension:crystal_idle_loop",
+        "volume": 0.65,
+        "stream": true
+      }
+    ]
+  },
+  "crystal_reform": {
+    "sounds": [
+      {
+        "name": "crossroaddimension:crystal_reform",
+        "volume": 0.65
+      }
+    ]
+  },
+  "crystal_slam": {
+    "sounds": [
+      {
+        "name": "crossroaddimension:crystal_slam",
+        "volume": 0.65
+      }
+    ]
+  },
+  "wisp_attunement": {
+    "sounds": [
+      {
+        "name": "crossroaddimension:wisp_attunement",
+        "volume": 0.65
+      }
+    ]
+  }
+}

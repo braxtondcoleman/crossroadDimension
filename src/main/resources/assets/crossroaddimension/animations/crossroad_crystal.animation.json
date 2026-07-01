@@ -4,6 +4,11 @@
 		"idle": {
 			"loop": true,
 			"animation_length": 8,
+			"sound_effects": {
+				"0.0": {
+					"effect": "crossroaddimension:crystal_idle_loop|0.65|1.0"
+				}
+			},
 			"bones": {
 				"Center": {
 					"rotation": {
@@ -150,6 +155,11 @@
 		"slam": {
 			"loop": "hold_on_last_frame",
 			"animation_length": 2.25,
+			"sound_effects": {
+				"0.0": {
+					"effect": "crossroaddimension:crystal_slam|1.0|1.0"
+				}
+			},
 			"bones": {
 				"Center": {
 					"rotation": {
@@ -255,6 +265,11 @@
 		},
 		"reform": {
 			"animation_length": 1,
+			"sound_effects": {
+				"0.0": {
+					"effect": "crossroaddimension:crystal_reform|1.0|1.0"
+				}
+			},
 			"bones": {
 				"Center": {
 					"rotation": {
